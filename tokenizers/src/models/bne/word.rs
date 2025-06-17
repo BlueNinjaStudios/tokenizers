@@ -34,6 +34,7 @@ impl Ord for Merge {
     }
 }
 
+// Implement merge symbol with vec of symbols
 #[derive(Debug, Clone, Copy)]
 struct Symbol {
     c: u32,

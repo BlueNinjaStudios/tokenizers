@@ -1,6 +1,6 @@
 #![allow(clippy::map_entry)]
 
-use super::{Pair, WithFirstLastIterator, Word, BPE};
+use super::{Pair, WithFirstLastIterator, Word, BNE};
 use crate::parallelism::*;
 use crate::tokenizer::{AddedToken, Result, Trainer};
 use crate::utils::progress::{ProgressBar, ProgressStyle};
@@ -8,15 +8,17 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
+// added length to the merge struct
 #[derive(Debug, Eq)]
 struct Merge {
     pair: Pair,
     count: u64,
     pos: HashSet<usize>,
+    length: u64
 }
 impl PartialEq for Merge {
     fn eq(&self, other: &Self) -> bool {
-        self.count == other.count && self.pair == other.pair
+        self.count == other.count && self.pair == other.pair && self.length == other.length
     }
 }
 impl PartialOrd for Merge {
@@ -24,10 +26,12 @@ impl PartialOrd for Merge {
         Some(self.cmp(other))
     }
 }
+
+// Order Merges by count times length
 impl Ord for Merge {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.count != other.count {
-            self.count.cmp(&other.count)
+        if self.count * (self.length-1) != other.count * (other.length-1){
+            (self.count * (self.length-1)).cmp(&(other.count * (other.length-1)))
         } else {
             // Here we want ascending order
             other.pair.cmp(&self.pair)
@@ -47,13 +51,13 @@ struct Config {
     max_token_length: Option<usize>,
 }
 
-/// A `BpeTrainerBuilder` can be used to create a `BpeTrainer` with a custom
+/// A `BneTrainerBuilder` can be used to create a `BneTrainer` with a custom
 /// configuration.
-pub struct BpeTrainerBuilder {
+pub struct BneTrainerBuilder {
     config: Config,
 }
 
-impl Default for BpeTrainerBuilder {
+impl Default for BneTrainerBuilder {
     fn default() -> Self {
         Self {
             config: Config {
@@ -71,8 +75,8 @@ impl Default for BpeTrainerBuilder {
     }
 }
 
-impl BpeTrainerBuilder {
-    /// Constructs a new `BpeTrainerBuilder`
+impl BneTrainerBuilder {
+    /// Constructs a new `BneTrainerBuilder`
     pub fn new() -> Self {
         Self::default()
     }
@@ -139,9 +143,9 @@ impl BpeTrainerBuilder {
         self
     }
 
-    /// Constructs the final BpeTrainer
-    pub fn build(self) -> BpeTrainer {
-        BpeTrainer {
+    /// Constructs the final BneTrainer
+    pub fn build(self) -> BneTrainer {
+        BneTrainer {
             min_frequency: self.config.min_frequency,
             vocab_size: self.config.vocab_size,
             show_progress: self.config.show_progress,
@@ -156,25 +160,25 @@ impl BpeTrainerBuilder {
     }
 }
 
-/// In charge of training a `BPE` model
+/// In charge of training a `BNE` model
 ///
 /// # Examples
 ///
 /// ```
 /// use tokenizers::tokenizer::Trainer;
-/// use tokenizers::models::bpe::{BPE, BpeTrainer};
+/// use tokenizers::models::bne::{BNE, BneTrainer};
 ///
 /// let sequences = vec![ "Hello", "World" ];
 ///
-/// let mut trainer = BpeTrainer::default();
+/// let mut trainer = BneTrainer::default();
 /// trainer.feed(sequences.iter(), |s| Ok(vec![s.to_owned()]));
 ///
-/// let mut model = BPE::default();
+/// let mut model = BNE::default();
 /// let special_tokens = trainer.train(&mut model).unwrap();
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
-pub struct BpeTrainer {
+pub struct BneTrainer {
     /// The minimum frequency a pair must have to produce a merge operation
     pub min_frequency: u64,
     /// The target vocabulary size
@@ -198,13 +202,13 @@ pub struct BpeTrainer {
     words: HashMap<String, u64>,
 }
 
-impl Default for BpeTrainer {
+impl Default for BneTrainer {
     fn default() -> Self {
         Self::builder().build()
     }
 }
 
-impl BpeTrainer {
+impl BneTrainer {
     pub fn new(min_frequency: u64, vocab_size: usize) -> Self {
         Self {
             min_frequency,
@@ -213,8 +217,8 @@ impl BpeTrainer {
         }
     }
 
-    pub fn builder() -> BpeTrainerBuilder {
-        BpeTrainerBuilder::new()
+    pub fn builder() -> BneTrainerBuilder {
+        BneTrainerBuilder::new()
     }
 
     /// Setup a progress bar if asked to show progress
@@ -261,12 +265,7 @@ impl BpeTrainer {
     }
 
     /// Compute the initial alphabet and limit it if relevant
-    fn compute_alphabet(
-        &self,
-        wc: &HashMap<String, u64>,
-        w2id: &mut HashMap<String, u32>,
-        id2w: &mut Vec<String>,
-    ) {
+    fn compute_alphabet(&self, wc: &HashMap<String, u64>, w2id: &mut HashMap<String, u32>, id2w: &mut Vec<String>,) {
         // Compute the alphabet from seen words
         let mut alphabet: HashMap<char, usize> = HashMap::new();
         for (word, count) in wc {
@@ -291,9 +290,7 @@ impl BpeTrainer {
         // Compute the number of chars to remove from the alphabet
         // If `limit_alphabet < initial_alphabet.len()`, some of these initial characters
         // will be removed
-        let to_remove = self
-            .limit_alphabet
-            .map(|limit| {
+        let to_remove = self.limit_alphabet.map(|limit| {
                 if alphabet.len() > limit {
                     alphabet.len() - limit
                 } else {
@@ -319,16 +316,17 @@ impl BpeTrainer {
         });
     }
 
+    /// TODO!!!!!
     /// Tokenize words and add subwords to the vocabulary when relevant
     fn tokenize_words(
         &self,
-        wc: &HashMap<String, u64>,
-        w2id: &mut HashMap<String, u32>,
-        id2w: &mut Vec<String>,
-        p: &Option<ProgressBar>,
+        wc: &HashMap<String, u64>,                                          // wordcount
+        w2id: &mut HashMap<String, u32>,                                    // word -> id
+        id2w: &mut Vec<String>,                                             // id -> word
+        p: &Option<ProgressBar>,                                            // progressBar
     ) -> (Vec<Word>, Vec<u64>) {
-        let mut words: Vec<Word> = Vec::with_capacity(wc.len());
-        let mut counts: Vec<u64> = Vec::with_capacity(wc.len());
+        let mut words: Vec<Word> = Vec::with_capacity(wc.len());            // wordsvector
+        let mut counts: Vec<u64> = Vec::with_capacity(wc.len());            // countsvector
 
         for (word, count) in wc {
             let mut current_word = Word::new();
@@ -432,7 +430,7 @@ impl BpeTrainer {
     pub fn do_train(
         &self,
         word_counts: &HashMap<String, u64>,
-        model: &mut BPE,
+        model: &mut BNE,
     ) -> Result<Vec<AddedToken>> {
         let mut word_to_id: HashMap<String, u32> = HashMap::with_capacity(self.vocab_size);
         let mut id_to_word: Vec<String> = Vec::with_capacity(self.vocab_size);
@@ -467,11 +465,13 @@ impl BpeTrainer {
         let mut queue = BinaryHeap::with_capacity(pair_counts.len());
         where_to_update.drain().for_each(|(pair, pos)| {
             let count = pair_counts[&pair];
+            
             if count > 0 {
                 queue.push(Merge {
                     pair,
                     count: count as u64,
                     pos,
+                    //length: length as u64,
                 });
             }
         });
@@ -590,6 +590,7 @@ impl BpeTrainer {
                         pair,
                         count: count as u64,
                         pos,
+                        //length: length as u64,
                     });
                 }
             });
@@ -628,11 +629,11 @@ impl BpeTrainer {
     }
 }
 
-impl Trainer for BpeTrainer {
-    type Model = BPE;
+impl Trainer for BneTrainer {
+    type Model = BNE;
 
-    /// Train a BPE model
-    fn train(&self, model: &mut BPE) -> Result<Vec<AddedToken>> {
+    /// Train a BNE model
+    fn train(&self, model: &mut BNE) -> Result<Vec<AddedToken>> {
         self.do_train(&self.words, model)
     }
 
@@ -675,7 +676,7 @@ impl Trainer for BpeTrainer {
 
 #[cfg(test)]
 mod tests {
-    use super::{BpeTrainer, Pair, BPE};
+    use super::{BneTrainer, Pair, BNE};
     use std::collections::HashMap;
 
     #[test]
@@ -696,11 +697,11 @@ mod tests {
         .iter()
         .cloned()
         .collect();
-        let trainer = BpeTrainer::builder()
+        let trainer = BneTrainer::builder()
             .show_progress(false)
             .min_frequency(2)
             .build();
-        let mut model = BPE::default();
+        let mut model = BNE::default();
         trainer.do_train(&word_counts, &mut model).unwrap();
 
         // Vocab should contain all of the characters from the `word_counts` mapping
@@ -753,7 +754,7 @@ mod tests {
     }
     #[test]
     fn bpe_test_max_token_length_16() {
-        /* bpe_test_max_token_length series of tests test the max_token_length flag of bpetrainer
+        /* bpe_test_max_token_length series of tests test the max_token_length flag of BneTrainer
         // this is the more robust version that only tests max length of learned tokens
         // (pre) tokenizer settings or vocab can be easily modified when necessary
          */
@@ -776,12 +777,12 @@ mod tests {
         .iter()
         .map(|(key, value)| (key.to_string(), *value))
         .collect();
-        let trainer = BpeTrainer::builder()
+        let trainer = BneTrainer::builder()
             .max_token_length(Some(max_token_length))
             .show_progress(false)
             .min_frequency(0)
             .build();
-        let mut model = BPE::default();
+        let mut model = BNE::default();
         trainer.do_train(&long_word_counts, &mut model).unwrap();
         let vocab = model.get_vocab();
         for token in vocab.keys() {
@@ -816,12 +817,12 @@ mod tests {
         .iter()
         .map(|(key, value)| (key.to_string(), *value))
         .collect();
-        let trainer = BpeTrainer::builder()
+        let trainer = BneTrainer::builder()
             .max_token_length(Some(2))
             .show_progress(false)
             .min_frequency(0)
             .build();
-        let mut model = BPE::default();
+        let mut model = BNE::default();
         trainer.do_train(&long_word_counts, &mut model).unwrap();
         let trained_vocab: HashMap<String, u32> = model.get_vocab();
         let expected_vocab: HashMap<String, u32> = [

@@ -1,4 +1,4 @@
-use super::{super::OrderedVocabIter, convert_merges_to_hashmap, BpeBuilder, Pair, BPE};
+use super::{super::OrderedVocabIter, convert_merges_to_hashmap, BneBuilder, Pair, BNE};
 use serde::{
     de::{Error, MapAccess, Visitor},
     ser::SerializeStruct,
@@ -6,15 +6,15 @@ use serde::{
 };
 use std::collections::HashMap;
 
-impl Serialize for BPE {
+impl Serialize for BNE {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut model = serializer.serialize_struct("BPE", 8)?;
+        let mut model = serializer.serialize_struct("BNE", 8)?;
 
         // Start by small fields
-        model.serialize_field("type", "BPE")?;
+        model.serialize_field("type", "BNE")?;
         model.serialize_field("dropout", &self.dropout)?;
         model.serialize_field("unk_token", &self.unk_token)?;
         model.serialize_field("continuing_subword_prefix", &self.continuing_subword_prefix)?;
@@ -43,13 +43,13 @@ impl Serialize for BPE {
     }
 }
 
-impl<'de> Deserialize<'de> for BPE {
+impl<'de> Deserialize<'de> for BNE {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         deserializer.deserialize_struct(
-            "BPE",
+            "BNE",
             &[
                 "type",
                 "dropout",
@@ -62,24 +62,24 @@ impl<'de> Deserialize<'de> for BPE {
                 "vocab",
                 "merges",
             ],
-            BPEVisitor,
+            BNEVisitor,
         )
     }
 }
 
-struct BPEVisitor;
-impl<'de> Visitor<'de> for BPEVisitor {
-    type Value = BPE;
+struct BNEVisitor;
+impl<'de> Visitor<'de> for BNEVisitor {
+    type Value = BNE;
 
     fn expecting(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "struct BPE")
+        write!(fmt, "struct BNE")
     }
 
     fn visit_map<V>(self, mut map: V) -> std::result::Result<Self::Value, V::Error>
     where
         V: MapAccess<'de>,
     {
-        let mut builder = BpeBuilder::new();
+        let mut builder = BneBuilder::new();
         let mut vocab: Option<HashMap<String, u32>> = None;
 
         #[derive(Debug, Deserialize)]
@@ -129,11 +129,11 @@ impl<'de> Visitor<'de> for BPEVisitor {
                 "vocab" => vocab = Some(map.next_value()?),
                 "merges" => merges = Some(map.next_value()?),
                 "type" => match map.next_value()? {
-                    "BPE" => {}
+                    "BNE" => {}
                     u => {
                         return Err(serde::de::Error::invalid_value(
                             serde::de::Unexpected::Str(u),
-                            &"BPE",
+                            &"BNE",
                         ))
                     }
                 },
@@ -158,7 +158,7 @@ impl<'de> Visitor<'de> for BPEVisitor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::models::bpe::Vocab;
+    use crate::models::bne::Vocab;
 
     #[test]
     fn test_serialization() {
@@ -171,24 +171,24 @@ mod test {
         .iter()
         .cloned()
         .collect();
-        let bpe = BpeBuilder::default()
+        let bne = BneBuilder::default()
             .vocab_and_merges(vocab, vec![("a".to_string(), "b".to_string())])
             .unk_token("<unk>".to_string())
             .ignore_merges(true)
             .build()
             .unwrap();
 
-        let legacy = r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":["a b"]}"#;
+        let legacy = r#"{"type":"BNE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":["a b"]}"#;
         let legacy = serde_json::from_str(legacy).unwrap();
-        assert_eq!(bpe, legacy);
+        assert_eq!(bne, legacy);
 
-        let data = serde_json::to_string(&bpe).unwrap();
+        let data = serde_json::to_string(&bne).unwrap();
         assert_eq!(
             data,
-            r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":[["a","b"]]}"#
+            r#"{"type":"BNE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":[["a","b"]]}"#
         );
         let reconstructed = serde_json::from_str(&data).unwrap();
-        assert_eq!(bpe, reconstructed);
+        assert_eq!(bne, reconstructed);
 
         // With a space in the token
         let vocab: Vocab = [
@@ -200,19 +200,19 @@ mod test {
         .iter()
         .cloned()
         .collect();
-        let bpe = BpeBuilder::default()
+        let bne = BneBuilder::default()
             .vocab_and_merges(vocab, vec![("a".to_string(), "b c d".to_string())])
             .unk_token("<unk>".to_string())
             .ignore_merges(true)
             .build()
             .unwrap();
-        let data = serde_json::to_string(&bpe).unwrap();
+        let data = serde_json::to_string(&bne).unwrap();
         assert_eq!(
             data,
-            r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b c d":2,"ab c d":3},"merges":[["a","b c d"]]}"#
+            r#"{"type":"BNE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b c d":2,"ab c d":3},"merges":[["a","b c d"]]}"#
         );
         let reconstructed = serde_json::from_str(&data).unwrap();
-        assert_eq!(bpe, reconstructed);
+        assert_eq!(bne, reconstructed);
     }
 
     #[test]
@@ -221,18 +221,18 @@ mod test {
             .iter()
             .cloned()
             .collect();
-        let mut bpe = BpeBuilder::default()
+        let mut bne = BneBuilder::default()
             .vocab_and_merges(vocab, vec![])
             .unk_token("<unk>".to_string())
             .ignore_merges(true)
             .build()
             .unwrap();
 
-        let bpe_string = r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2},"merges":[]}"#;
-        assert_eq!(serde_json::from_str::<BPE>(bpe_string).unwrap(), bpe);
+        let bne_string = r#"{"type":"BNE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2},"merges":[]}"#;
+        assert_eq!(serde_json::from_str::<BNE>(bne_string).unwrap(), bne);
 
-        bpe.ignore_merges = false;
-        let bpe_string = r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"vocab":{"<unk>":0,"a":1,"b":2},"merges":[]}"#;
-        assert_eq!(serde_json::from_str::<BPE>(bpe_string).unwrap(), bpe);
+        bne.ignore_merges = false;
+        let bne_string = r#"{"type":"BNE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"vocab":{"<unk>":0,"a":1,"b":2},"merges":[]}"#;
+        assert_eq!(serde_json::from_str::<BNE>(bne_string).unwrap(), bne);
     }
 }
