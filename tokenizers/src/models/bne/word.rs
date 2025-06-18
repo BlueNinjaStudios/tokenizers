@@ -1,13 +1,16 @@
 use super::Pair;
+use super::Ngram;
 use rand::{thread_rng, Rng};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
+use std::usize;
 
 #[derive(Debug, Eq)]
 struct Merge {
     pos: usize,
     rank: u32,
     new_id: u32,
+    length: u32
 }
 
 impl PartialEq for Merge {
@@ -50,6 +53,16 @@ impl Symbol {
         self.c = new_c;
         self.len += other.len;
         self.next = other.next;
+    }
+
+    /// TODO:   Check if vector is necessary (alt. array)
+    ///         Check if iter is necessary (alt. just leave it)
+    pub fn merge_with_vec(&mut self, other: Vec<&Self>, new_c: u32) {
+        self.c = new_c;
+        self.next = other[other.len()-1].next; /// last mut
+        for sym in other.iter() {
+            self.len += sym.len;
+        }
     }
 }
 
@@ -104,13 +117,10 @@ impl Word {
         });
     }
 
-    pub(super) fn merge(
-        &mut self,
-        c1: u32,
-        c2: u32,
-        replacement: u32,
-        max_length: usize,
-    ) -> Vec<(Pair, i32)> {
+    /// TODO: Figgure out changes!
+    /// Merges a pair in a word. Change to merge an Ngram in a word
+    /// Todo change pair to Ngram maybe
+    pub(super) fn merge(&mut self, c: Vec<u32>, replacement: u32, max_length: usize,) -> Vec<(Pair, i32)> {
         let mut changes: Vec<(Pair, i32)> = vec![];
         let mut i = 0;
         loop {
@@ -118,20 +128,29 @@ impl Word {
                 break;
             }
 
-            // Found a pair
-            if self.symbols[i].c == c1 && i + 1 < self.symbols.len() && self.symbols[i + 1].c == c2
-            {
-                let first = self.symbols[i];
-                let second = self.symbols[i + 1];
+            // Check for matching ngram
+            let mut matching = (i + c.len() - 1) < self.symbols.len(); /// Ngram fits in word starting at i
+            let mut length:usize = 0;
 
+            if matching {
+                for j in 0..c.len() {
+                    matching &= c[j] == self.symbols[i+j].c;
+                    length += self.symbols[i+j].len;
+                }
+            }
+
+            // Found matching Ngram
+            if matching
+            {
                 // Remove in place
                 let new_s = Symbol {
                     c: replacement,
-                    prev: first.prev,
-                    next: second.next,
-                    len: first.len + second.len,
+                    prev: self.symbols[i].prev,
+                    next: self.symbols[i+c.len()-1].next,
+                    len: length,
                 };
 
+                /// TODO: Add all necessary changes for Ngram manipulation, not clear yet, since usage of changes not known
                 // If there are other characters before the pair
                 if i > 0 {
                     changes.push(((self.symbols[i - 1].c, first.c), -1));
@@ -159,6 +178,8 @@ impl Word {
         changes
     }
 
+
+    /// Unfinished for now!!
     pub(super) fn merge_all(&mut self, merges: &HashMap<Pair, (u32, u32)>, dropout: Option<f32>) {
         let mut queue = BinaryHeap::with_capacity(self.symbols.len());
         let mut skip = Vec::with_capacity(queue.len());

@@ -8,6 +8,7 @@ mod word;
 
 //TODO: Change to n-gram (maybe, pair of start + length)
 type Pair = (u32, u32);
+type Ngram = Vec<u32>;
 
 /// Errors that can be encountered while using or constructing a `BNE` model.
 #[derive(thiserror::Error, Debug)]
