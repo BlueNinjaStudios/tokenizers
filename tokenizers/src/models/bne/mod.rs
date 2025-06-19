@@ -8,7 +8,23 @@ mod word;
 
 //TODO: Change to n-gram (maybe, pair of start + length)
 type Pair = (u32, u32);
-type Ngram = Vec<u32>;
+#[derive(Debug, Eq, Hash)]
+struct Ngram {
+    ids: Vec<u32>,
+}
+impl PartialEq for Ngram {
+    fn eq(&self, other: &Self) -> bool {
+        if self.ids.len() != other.ids.len() {
+            return false;
+        }
+        for i in 0..self.ids.len() {
+            if self.ids[i] != other.ids[i] {
+                return false
+            }
+        }
+        true
+    }
+}
 
 /// Errors that can be encountered while using or constructing a `BNE` model.
 #[derive(thiserror::Error, Debug)]

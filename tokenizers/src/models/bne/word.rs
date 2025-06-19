@@ -309,7 +309,7 @@ mod tests {
 
         // We're going to perform a merge on the pair ('l', 'l') ~= (2, 2). Let's
         // say that 'll' has the ID of 4 in the updated word-to-id vocab.
-        let changes = word.merge(2, 2, 4, usize::MAX);
+        let changes = word.merge(vec![2,2], 4, usize::MAX);
 
         // So the word should now look like this:
         assert_eq!(

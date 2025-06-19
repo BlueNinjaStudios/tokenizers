@@ -1,6 +1,6 @@
 #![allow(clippy::map_entry)]
 
-use super::{Pair, WithFirstLastIterator, Word, BNE};
+use super::{Pair, WithFirstLastIterator, Word, BNE, Ngram};
 use crate::parallelism::*;
 use crate::tokenizer::{AddedToken, Result, Trainer};
 use crate::utils::progress::{ProgressBar, ProgressStyle};
@@ -373,42 +373,42 @@ impl BneTrainer {
         words: &[Word],
         counts: &[u64],
         p: &Option<ProgressBar>,
-    ) -> (HashMap<Pair, i32>, HashMap<Pair, HashSet<usize>>) {
+    ) -> (HashMap<Ngram, i32>, HashMap<Ngram, HashSet<usize>>) {
         words
             .maybe_par_iter()
             .enumerate()
             .map(|(i, word)| {
-                let mut pair_counts = HashMap::new();
-                let mut where_to_update: HashMap<Pair, HashSet<usize>> = HashMap::new();
+                // Struct mapping, with built in comparator
+                let mut ngram_counts: HashMap<Ngram, i32> = HashMap::new();
+                let mut where_to_update: HashMap<Ngram, HashSet<usize>> = HashMap::new();
+                
+                // change windowsize depending on word size
+                for ngram_len in 2..word.get_chars().len() { 
+                    for window in word.get_chars().windows(ngram_len) {
+                        let cur_ngram= Ngram {
+                            ids: Vec::from(window),
+                        };
 
-                for window in word.get_chars().windows(2) {
-                    let cur_pair: Pair = (window[0], window[1]);
+                        // Initialize pair_counts and where_to_update for this pair if we just saw it
+                        if !ngram_counts.contains_key(&cur_ngram) {
+                            ngram_counts.insert(cur_ngram, 0);
+                        }
 
-                    // Initialize pair_counts and where_to_update for this pair if we just saw it
-                    if !pair_counts.contains_key(&cur_pair) {
-                        pair_counts.insert(cur_pair, 0);
+                        // Then update counts
+                        let count = counts[i];
+                        where_to_update
+                            .entry(cur_ngram)
+                            .and_modify(|h| {h.insert(i);})
+                            .or_insert_with(|| {let mut h = HashSet::new();h.insert(i);h});
+                        *ngram_counts.get_mut(&cur_ngram).unwrap() += count as i32;
                     }
-
-                    // Then update counts
-                    let count = counts[i];
-                    where_to_update
-                        .entry(cur_pair)
-                        .and_modify(|h| {
-                            h.insert(i);
-                        })
-                        .or_insert_with(|| {
-                            let mut h = HashSet::new();
-                            h.insert(i);
-                            h
-                        });
-                    *pair_counts.get_mut(&cur_pair).unwrap() += count as i32;
                 }
 
                 if let Some(p) = &p {
                     p.inc(1);
                 }
 
-                (pair_counts, where_to_update)
+                (ngram_counts, where_to_update)
             })
             .reduce(
                 || (HashMap::new(), HashMap::new()),
