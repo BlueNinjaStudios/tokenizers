@@ -9,16 +9,17 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 // added length to the merge struct
+// TODO: Test merge struct in simple program
 #[derive(Debug, Eq)]
 struct Merge {
-    pair: Pair,
+    ngram: Ngram,
     count: u64,
     pos: HashSet<usize>,
-    length: u64
+    length: u64,
 }
 impl PartialEq for Merge {
     fn eq(&self, other: &Self) -> bool {
-        self.count == other.count && self.pair == other.pair && self.length == other.length
+        self.count == other.count && self.ngram == other.ngram && self.length == other.length
     }
 }
 impl PartialOrd for Merge {
@@ -34,7 +35,7 @@ impl Ord for Merge {
             (self.count * (self.length-1)).cmp(&(other.count * (other.length-1)))
         } else {
             // Here we want ascending order
-            other.pair.cmp(&self.pair)
+            other.ngram.cmp(&self.ngram)
         }
     }
 }
@@ -316,7 +317,6 @@ impl BneTrainer {
         });
     }
 
-    /// TODO!!!!!
     /// Tokenize words and add subwords to the vocabulary when relevant
     fn tokenize_words(
         &self,
@@ -368,7 +368,7 @@ impl BneTrainer {
         (words, counts)
     }
 
-    fn count_pairs(
+    fn count_ngrams(
         &self,
         words: &[Word],
         counts: &[u64],
@@ -378,6 +378,9 @@ impl BneTrainer {
             .maybe_par_iter()
             .enumerate()
             .map(|(i, word)| {
+                // Ngram counts: mapping from ngram to counts
+                // where to update: mapping from ngram to words containing it for update purposes
+                // TODO: add ngrams to update: mapping from ngrams to ngrams which contain the other ngram (not necessary probably)
                 // Struct mapping, with built in comparator
                 let mut ngram_counts: HashMap<Ngram, i32> = HashMap::new();
                 let mut where_to_update: HashMap<Ngram, HashSet<usize>> = HashMap::new();
@@ -391,15 +394,16 @@ impl BneTrainer {
 
                         // Initialize pair_counts and where_to_update for this pair if we just saw it
                         if !ngram_counts.contains_key(&cur_ngram) {
-                            ngram_counts.insert(cur_ngram, 0);
+                            ngram_counts.insert(cur_ngram.clone(), 0);
                         }
 
                         // Then update counts
                         let count = counts[i];
                         where_to_update
-                            .entry(cur_ngram)
+                            .entry(cur_ngram.clone())
                             .and_modify(|h| {h.insert(i);})
                             .or_insert_with(|| {let mut h = HashSet::new();h.insert(i);h});
+
                         *ngram_counts.get_mut(&cur_ngram).unwrap() += count as i32;
                     }
                 }
@@ -460,18 +464,19 @@ impl BneTrainer {
         // 4. Count pairs in words
         //
         self.update_progress(&progress, words.len(), "Count pairs");
-        let (mut pair_counts, mut where_to_update) = self.count_pairs(&words, &counts, &progress);
+        let (mut ngram_counts, mut where_to_update) = self.count_ngrams(&words, &counts, &progress);
         // Insert them in the queue
-        let mut queue = BinaryHeap::with_capacity(pair_counts.len());
-        where_to_update.drain().for_each(|(pair, pos)| {
-            let count = pair_counts[&pair];
-            
+        let mut queue = BinaryHeap::with_capacity(ngram_counts.len());
+        where_to_update.drain().for_each(|(ngram, pos)| {
+            let count = ngram_counts[&ngram];
+            let length = ngram.ids.len();
+
             if count > 0 {
                 queue.push(Merge {
-                    pair,
+                    ngram,
                     count: count as u64,
                     pos,
-                    //length: length as u64,
+                    length: length as u64,
                 });
             }
         });
@@ -488,23 +493,27 @@ impl BneTrainer {
                 break;
             }
 
+            // Stop if the queue is empty
             if queue.is_empty() {
                 break;
             }
 
+            // If top Merge score is not accurate, update it
             let mut top = queue.pop().unwrap();
-            if top.count != pair_counts[&top.pair] as u64 {
-                top.count = pair_counts[&top.pair] as u64;
+            if top.count != ngram_counts[&top.ngram] as u64 {
+                top.count = ngram_counts[&top.ngram] as u64;
                 queue.push(top);
                 continue;
             }
 
+            // Stop if top count is too small (does not exceede min frequency)
             if top.count < 1 || self.min_frequency > top.count {
                 break;
             }
 
-            let part_a = &id_to_word[top.pair.0 as usize];
-            let mut part_b = id_to_word[top.pair.1 as usize].to_owned();
+            // Build a new token
+            let part_a = &id_to_word[top.ngram.0 as usize];
+            let mut part_b = id_to_word[top.ngram.1 as usize].to_owned();
 
             // Build new token
             if let Some(prefix) = &self.continuing_subword_prefix {
@@ -527,7 +536,7 @@ impl BneTrainer {
                 id_to_word.push(new_token.clone());
                 word_to_id.insert(new_token.clone(), new_token_id);
             }
-            merges.push((top.pair, new_token_id));
+            merges.push((top.ngram, new_token_id));
 
             // Merge the new pair in every words
             // Safety: This is just a type assertion, the code below may no longer be safe
@@ -555,7 +564,7 @@ impl BneTrainer {
                         let word = word_start.0.add(i);
                         // let word: &mut Word = &mut (*word);
                         (*word)
-                            .merge(top.pair.0, top.pair.1, new_token_id, max_token_length)
+                            .merge(top.ngram.0, top.ngram.1, new_token_id, max_token_length)
                             .into_iter()
                             .map(|c| (c, i))
                             .collect::<Vec<_>>()
@@ -566,7 +575,7 @@ impl BneTrainer {
             // Introduce new formed pairs
             for ((pair, change), iw) in changes {
                 let count = change * counts[iw] as i32;
-                pair_counts
+                ngram_counts
                     .entry(pair)
                     .and_modify(|c| *c += count)
                     .or_insert(count);
@@ -584,10 +593,10 @@ impl BneTrainer {
                 }
             }
             where_to_update.drain().for_each(|(pair, pos)| {
-                let count = pair_counts[&pair];
+                let count = ngram_counts[&pair];
                 if count > 0 {
                     queue.push(Merge {
-                        pair,
+                        ngram: pair,
                         count: count as u64,
                         pos,
                         //length: length as u64,
