@@ -120,7 +120,8 @@ impl Word {
     /// TODO: Figgure out changes!
     /// Merges a pair in a word. Change to merge an Ngram in a word
     /// Todo change pair to Ngram maybe
-    pub(super) fn merge(&mut self, c: Vec<u32>, replacement: u32, max_length: usize,) -> Vec<(Pair, i32)> {
+    /// maybe make c input to Ngram type
+    pub(super) fn merge(&mut self, c: Vec<u32>, replacement: u32, max_length: usize,) -> Vec<(Ngram, i32)> {
         let mut changes: Vec<(Pair, i32)> = vec![];
         let mut i = 0;
         loop {
