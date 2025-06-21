@@ -1,5 +1,6 @@
 //! [Byte n-gram Encoding]
 use std::{iter, mem};
+use std::cmp::Ordering;
 
 mod model;
 mod serialization;
@@ -8,7 +9,7 @@ mod word;
 
 //TODO: Change to n-gram (maybe, pair of start + length)
 type Pair = (u32, u32);
-#[derive(Debug, Eq, Hash)]
+#[derive(Debug, Eq, Hash, Clone)]
 struct Ngram {
     ids: Vec<u32>,
 }
@@ -23,6 +24,23 @@ impl PartialEq for Ngram {
             }
         }
         true
+    }
+}
+impl PartialOrd for Ngram {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Ngram {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.ids.len() != other.ids.len() {
+            self.ids.len().cmp(&other.ids.len())
+        } else {
+            self.ids.iter().zip(other.ids.clone())
+                .map(|(x, y)| x.cmp(&y))
+                .find(|&o| o != Ordering::Equal)
+                .unwrap_or(Ordering::Equal)
+        }
     }
 }
 
