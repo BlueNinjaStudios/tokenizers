@@ -1,6 +1,6 @@
 #![allow(clippy::map_entry)]
 
-use super::{Pair, WithFirstLastIterator, Word, BNE, Ngram};
+use super::{WithFirstLastIterator, Word, BNE, Ngram};
 use crate::parallelism::*;
 use crate::tokenizer::{AddedToken, Result, Trainer};
 use crate::utils::progress::{ProgressBar, ProgressStyle};
@@ -368,6 +368,7 @@ impl BneTrainer {
         (words, counts)
     }
 
+    /// Only adds Ngram that do not exceed max_token_length
     fn count_ngrams(
         &self,
         words: &[Word],
@@ -380,13 +381,13 @@ impl BneTrainer {
             .map(|(i, word)| {
                 // Ngram counts: mapping from ngram to counts
                 // where to update: mapping from ngram to words containing it for update purposes
-                // TODO: add ngrams to update: mapping from ngrams to ngrams which contain the other ngram (not necessary probably)
                 // Struct mapping, with built in comparator
                 let mut ngram_counts: HashMap<Ngram, i32> = HashMap::new();
                 let mut where_to_update: HashMap<Ngram, HashSet<usize>> = HashMap::new();
                 
                 // change windowsize depending on word size
-                for ngram_len in 2..word.get_chars().len() { 
+                let max_ngram_len = if self.max_token_length.unwrap_or(usize::MAX) < word.get_chars().len() {self.max_token_length.unwrap_or(usize::MAX)} else {word.get_chars().len()};
+                for ngram_len in 2..max_ngram_len { 
                     for window in word.get_chars().windows(ngram_len) {
                         let cur_ngram= Ngram {
                             ids: Vec::from(window),
@@ -436,8 +437,8 @@ impl BneTrainer {
         word_counts: &HashMap<String, u64>,
         model: &mut BNE,
     ) -> Result<Vec<AddedToken>> {
-        let mut word_to_id: HashMap<String, u32> = HashMap::with_capacity(self.vocab_size);
-        let mut id_to_word: Vec<String> = Vec::with_capacity(self.vocab_size);
+        let mut word_to_id: HashMap<String, u32> = HashMap::with_capacity(self.vocab_size); // token to id
+        let mut id_to_word: Vec<String> = Vec::with_capacity(self.vocab_size); // id to token
         let max_token_length: usize = self.max_token_length.unwrap_or(usize::MAX);
 
         let progress = self.setup_progress();
@@ -486,7 +487,7 @@ impl BneTrainer {
         // 5. Do merges
         //
         self.update_progress(&progress, self.vocab_size, "Compute merges");
-        let mut merges: Vec<(Pair, u32)> = vec![];
+        let mut merges: Vec<(Ngram, u32)> = vec![];
         loop {
             // Stop as soon as we have a big enough vocabulary
             if word_to_id.len() >= self.vocab_size {
@@ -512,10 +513,13 @@ impl BneTrainer {
             }
 
             // Build a new token
+            let token_vec: Vec<_> = top.ngram.ids.iter().map(|id| id_to_word[*id as usize]).collect();
             let part_a = &id_to_word[top.ngram.0 as usize];
             let mut part_b = id_to_word[top.ngram.1 as usize].to_owned();
 
             // Build new token
+            // Maybe edit continuing_subword_prefix (best course: Remove for beginning...; similarly with end of word)
+
             if let Some(prefix) = &self.continuing_subword_prefix {
                 if part_b.starts_with(prefix) {
                     let prefix_byte_len = prefix.chars().map(|c| c.len_utf8()).sum();
@@ -620,7 +624,7 @@ impl BneTrainer {
         model.merges = merges
             .into_iter()
             .enumerate()
-            .map(|(i, (pair, new_token_id))| (pair, (i as u32, new_token_id)))
+            .map(|(i, (ngram, new_token_id))| (ngram, (i as u32, new_token_id)))
             .collect();
 
         if let Some(prefix) = &self.continuing_subword_prefix {
@@ -685,7 +689,7 @@ impl Trainer for BneTrainer {
 
 #[cfg(test)]
 mod tests {
-    use super::{BneTrainer, Pair, BNE};
+    use super::{BneTrainer, Ngram, BNE};
     use std::collections::HashMap;
 
     #[test]
@@ -751,7 +755,7 @@ mod tests {
         // where 'rank' determines the order in which this merge will be applied during
         // tokenization, and 'id' is the vocab id of the symbol resulting from merging
         // the pair of symbols in the corresponding key.
-        let expected_merges: HashMap<Pair, (u32, u32)> = [
+        let expected_merges: HashMap<Ngram, (u32, u32)> = [
             ((17, 11), (0, 22)), // 'r' + 'e'  -> 're'
             ((8, 22), (1, 23)),  // 'a' + 're' -> 'are'
             ((13, 18), (2, 24)), // 'i' + 's'  -> 'is'
