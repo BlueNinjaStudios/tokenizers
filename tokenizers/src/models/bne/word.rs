@@ -116,11 +116,9 @@ impl Word {
         });
     }
 
-    /// TODO: Figgure out changes!
-    /// Merges a pair in a word. Change to merge an Ngram in a word
-    /// Todo change pair to Ngram maybe
+    /// Merges an Ngram in a word.
     /// maybe make c input to Ngram type
-    /// Figgure out subsequent merges
+    /// subsequent merges should work, but check
     pub(super) fn merge(&mut self, c: Vec<u32>, replacement: u32, max_length: usize,) -> Vec<(Ngram, i32)> {
         let mut changes: Vec<(Ngram, i32)> = vec![];
         let mut i = 0;
@@ -154,6 +152,7 @@ impl Word {
 
                 // Added all necessary changes for ngram manipulation. To be tested
                 // Remove all Ngrams containing a part of the symbol in the word
+                // Possibly optimize to reuse vecs for ngrams
                 for end_index in i..self.symbols.len() {
                     let end = if i + c.len() - 1 < end_index-1 {i + c.len() - 1} else {end_index-1};
                     for start_index in 0..end {
