@@ -1,4 +1,4 @@
-use super::{super::OrderedVocabIter, convert_merges_to_hashmap, BneBuilder, Pair, BNE};
+use super::{super::OrderedVocabIter, convert_merges_to_hashmap, BneBuilder, Ngram, BNE};
 use serde::{
     de::{Error, MapAccess, Visitor},
     ser::SerializeStruct,
@@ -24,7 +24,7 @@ impl Serialize for BNE {
         model.serialize_field("ignore_merges", &self.ignore_merges)?;
 
         // Then the large ones
-        let mut merges: Vec<(&Pair, &u32)> = self
+        let mut merges: Vec<(&Ngram, &u32)> = self
             .merges
             .iter()
             .map(|(pair, (rank, _))| (pair, rank))
@@ -32,7 +32,7 @@ impl Serialize for BNE {
         merges.sort_unstable_by_key(|k| *k.1);
         let merges = merges
             .into_iter()
-            .map(|(pair, _)| (self.vocab_r[&pair.0].clone(), self.vocab_r[&pair.1].clone()))
+            .map(|(ngram, _)| (self.vocab_r[&pair.0].clone(), self.vocab_r[&pair.1].clone()))
             .collect::<Vec<_>>();
         let ordered_vocab = OrderedVocabIter::new(&self.vocab_r);
 
