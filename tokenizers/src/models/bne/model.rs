@@ -1,4 +1,4 @@
-use super::{super::OrderedVocabIter, trainer::BneTrainer, Error, Pair, Word, Ngram};
+use super::{super::OrderedVocabIter, trainer::BneTrainer, Error, Word, Ngram};
 use crate::tokenizer::{Model, Result, Token};
 use crate::utils::cache::{Cache, DEFAULT_CACHE_CAPACITY, MAX_LENGTH};
 use crate::utils::iter::ResultShunt;
@@ -16,6 +16,7 @@ pub type Vocab = HashMap<String, u32>;
 type VocabR = HashMap<u32, String>;
 pub type MergeMap = HashMap<Ngram, (u32, u32)>;
 pub type Merges = Vec<(String, String)>;
+//pub type Merges = Vec<Vec<String>>
 
 struct Config {
     files: Option<(String, String)>,
