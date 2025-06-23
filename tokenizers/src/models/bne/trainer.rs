@@ -512,21 +512,24 @@ impl BneTrainer {
                 break;
             }
 
+            // TODO: Check for moves
             // Build a new token
-            let token_vec: Vec<_> = top.ngram.ids.iter().map(|id| id_to_word[*id as usize]).collect();
-            let part_a = &id_to_word[top.ngram.0 as usize];
-            let mut part_b = id_to_word[top.ngram.1 as usize].to_owned();
+            let mut token_vec: Vec<&String> = top.ngram.ids.iter().map(|id| &id_to_word[*id as usize]).collect();
 
             // Build new token
-            // Maybe edit continuing_subword_prefix (best course: Remove for beginning...; similarly with end of word)
+            // Remove continuing subword prefix from characters/tokens when stored as new token
 
             if let Some(prefix) = &self.continuing_subword_prefix {
-                if part_b.starts_with(prefix) {
-                    let prefix_byte_len = prefix.chars().map(|c| c.len_utf8()).sum();
-                    part_b = part_b[prefix_byte_len..].to_string();
+                for i in 1..token_vec.len() {
+                    let part_b = token_vec[i];
+                    if part_b.starts_with(prefix) {
+                        let prefix_byte_len = prefix.chars().map(|c| c.len_utf8()).sum();
+                        token_vec[i] = &part_b.clone()[prefix_byte_len..].to_string();
+                    }
                 }
             }
-            let new_token = format!("{part_a}{part_b}");
+
+            let new_token = token_vec.iter().map(|s|**s).collect().join();
             // implement sentencepiece-like merge.
             // if this code were to be merged, integrate a way in the python bindings to communicate this variable
             // default should be 0/None to maintain previous behavior. 16 is the spm default.
@@ -568,7 +571,7 @@ impl BneTrainer {
                         let word = word_start.0.add(i);
                         // let word: &mut Word = &mut (*word);
                         (*word)
-                            .merge(top.ngram.0, top.ngram.1, new_token_id, max_token_length)
+                            .merge(top.ngram.ids, new_token_id, max_token_length)
                             .into_iter()
                             .map(|c| (c, i))
                             .collect::<Vec<_>>()
@@ -577,15 +580,16 @@ impl BneTrainer {
                 .collect::<Vec<_>>();
 
             // Introduce new formed pairs
-            for ((pair, change), iw) in changes {
+            // TODO: Check if this works for ngrams and merging within ngrams
+            for ((ngram, change), iw) in changes {
                 let count = change * counts[iw] as i32;
                 ngram_counts
-                    .entry(pair)
+                    .entry(ngram)
                     .and_modify(|c| *c += count)
                     .or_insert(count);
                 if change > 0 {
                     where_to_update
-                        .entry(pair)
+                        .entry(ngram)
                         .and_modify(|h| {
                             h.insert(iw);
                         })
@@ -596,14 +600,15 @@ impl BneTrainer {
                         });
                 }
             }
-            where_to_update.drain().for_each(|(pair, pos)| {
-                let count = ngram_counts[&pair];
+            where_to_update.drain().for_each(|(ngram, pos)| {
+                let count = ngram_counts[&ngram];
                 if count > 0 {
+                    let length = ngram.ids.len();
                     queue.push(Merge {
-                        ngram: pair,
+                        ngram,
                         count: count as u64,
                         pos,
-                        //length: length as u64,
+                        length: length as u64,
                     });
                 }
             });
@@ -877,4 +882,5 @@ mod tests {
         .collect();
         assert_eq!(trained_vocab, expected_vocab)
     }
+}
 */
