@@ -1,4 +1,3 @@
-use super::Pair;
 use super::Ngram;
 use rand::{thread_rng, Rng};
 use std::cmp::Ordering;
@@ -59,7 +58,7 @@ impl Symbol {
     ///         Check if iter is necessary (alt. just leave it)
     pub fn merge_with_vec(&mut self, other: Vec<&Self>, new_c: u32) {
         self.c = new_c;
-        self.next = other[other.len()-1].next; /// last mut
+        self.next = other[other.len()-1].next; // last mut
         for sym in other.iter() {
             self.len += sym.len;
         }
@@ -121,8 +120,9 @@ impl Word {
     /// Merges a pair in a word. Change to merge an Ngram in a word
     /// Todo change pair to Ngram maybe
     /// maybe make c input to Ngram type
+    /// Figgure out subsequent merges
     pub(super) fn merge(&mut self, c: Vec<u32>, replacement: u32, max_length: usize,) -> Vec<(Ngram, i32)> {
-        let mut changes: Vec<(Pair, i32)> = vec![];
+        let mut changes: Vec<(Ngram, i32)> = vec![];
         let mut i = 0;
         loop {
             if i >= self.symbols.len() {
@@ -130,7 +130,7 @@ impl Word {
             }
 
             // Check for matching ngram
-            let mut matching = (i + c.len() - 1) < self.symbols.len(); /// Ngram fits in word starting at i
+            let mut matching = (i + c.len() - 1) < self.symbols.len(); // Ngram fits in word starting at i
             let mut length:usize = 0;
 
             if matching {
@@ -151,24 +151,43 @@ impl Word {
                     len: length,
                 };
 
-                /// TODO: Add all necessary changes for Ngram manipulation, not clear yet, since usage of changes not known
-                // If there are other characters before the pair
-                if i > 0 {
-                    changes.push(((self.symbols[i - 1].c, first.c), -1));
-                    if self.symbols[i - 1].len + new_s.len < max_length {
-                        changes.push(((self.symbols[i - 1].c, replacement), 1));
+
+                // Added all necessary changes for ngram manipulation. To be tested
+                // Remove all Ngrams containing a part of the symbol in the word
+                for end_index in i..self.symbols.len() {
+                    let end = if i + c.len() - 1 < end_index-1 {i + c.len() - 1} else {end_index-1};
+                    for start_index in 0..end {
+                        let ngram_length = self.symbols[start_index..end_index+1].iter().fold(0, |acc, sym| acc + sym.len);
+                        if ngram_length <= max_length {
+                            changes.push(
+                                (Ngram {
+                                    ids:self.symbols[start_index..end_index+1].iter().map(|elem| elem.c).collect()
+                                }, -1)
+                            );
                     }
                 }
+                }
 
-                self.symbols.insert(i, new_s); // Insert replacement before first char of pair
-                self.symbols.remove(i + 1); // Remove first char of pair
-                self.symbols.remove(i + 1); // And then the second
 
-                // If there are other characters after the pair
-                if i < self.symbols.len() - 1 {
-                    changes.push(((second.c, self.symbols[i + 1].c), -1));
-                    if self.symbols[i + 1].len + new_s.len < max_length {
-                        changes.push(((replacement, self.symbols[i + 1].c), 1));
+                // Changed to remove whole Ngram
+                self.symbols.insert(i, new_s); // Insert replacement before first char of Ngram
+                for _ in 0..c.len() {
+                    self.symbols.remove(i + 1); // Remove all symbols of the new token from word
+                }
+
+                // Add back all Ngrams containing a the whole symbol as a token
+                // Continue here!
+                for end_index in i..self.symbols.len() {
+                    let end = if i < end_index-1 {i} else {end_index-1};
+                    for start_index in 0..end {
+                        let ngram_length = self.symbols[start_index..end_index+1].iter().fold(0, |acc, sym| acc + sym.len);
+                        if ngram_length <= max_length {
+                            changes.push(
+                                (Ngram {
+                                    ids:self.symbols[start_index..end_index+1].iter().map(|elem| elem.c).collect()
+                                }, 1)
+                            );
+                        }
                     }
                 }
             }
