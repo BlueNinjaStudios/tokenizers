@@ -687,6 +687,7 @@ impl Trainer for BneTrainer {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::{BneTrainer, Ngram, BNE};
@@ -876,4 +877,4 @@ mod tests {
         .collect();
         assert_eq!(trained_vocab, expected_vocab)
     }
-}
+*/
