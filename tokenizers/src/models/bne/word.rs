@@ -163,8 +163,8 @@ impl Word {
                                     ids:self.symbols[start_index..end_index+1].iter().map(|elem| elem.c).collect()
                                 }, -1)
                             );
+                        }
                     }
-                }
                 }
 
 
@@ -175,7 +175,6 @@ impl Word {
                 }
 
                 // Add back all Ngrams containing a the whole symbol as a token
-                // Continue here!
                 for end_index in i..self.symbols.len() {
                     let end = if i < end_index-1 {i} else {end_index-1};
                     for start_index in 0..end {
@@ -199,23 +198,27 @@ impl Word {
 
 
     /// Unfinished for now!!
-    pub(super) fn merge_all(&mut self, merges: &HashMap<Pair, (u32, u32)>, dropout: Option<f32>) {
-        let mut queue = BinaryHeap::with_capacity(self.symbols.len());
+    pub(super) fn merge_all(&mut self, merges: &HashMap<Ngram, (u32, u32)>, dropout: Option<f32>) {
+        let mut queue = BinaryHeap::with_capacity(self.symbols.len()*(self.symbols.len()-1)/2);
         let mut skip = Vec::with_capacity(queue.len());
 
-        queue.extend(
-            self.symbols
-                .windows(2)
-                .enumerate()
-                .filter_map(|(index, window)| {
-                    let pair = (window[0].c, window[1].c);
-                    merges.get(&pair).map(|m| Merge {
-                        pos: index,
-                        rank: m.0,
-                        new_id: m.1,
-                    })
-                }),
-        );
+        // extend queue with all ngram sizes
+        for i in 2..self.symbols.len(){
+            queue.extend(
+                self.symbols
+                    .windows(i)
+                    .enumerate()
+                    .filter_map(|(index, window)| {
+                        let ngram = Ngram {ids: window.iter().map(|elem| elem.c).collect()};
+                        merges.get(&ngram).map(|m| Merge {
+                            pos: index,
+                            rank: m.0,
+                            new_id: m.1,
+                            length: i as u32
+                        })
+                    }),
+            );
+        }
 
         while let Some(top) = queue.pop() {
             if dropout
@@ -227,6 +230,7 @@ impl Word {
                 // Re-insert the skipped elements
                 queue.extend(skip.drain(..));
 
+                // Do nothing if current symbol has already been removed
                 if self.symbols[top.pos].len == 0 {
                     continue;
                 }
@@ -235,55 +239,78 @@ impl Word {
                     continue;
                 }
 
-                let next_pos = self.symbols[top.pos].next as usize;
-                let right = self.symbols[next_pos];
+                let mut new_ids: Vec<u32> = Vec::with_capacity(top.length as usize);
+                let mut curr = self.symbols[top.pos];
+                for _ in 0..top.length {
+                    new_ids.push(curr.c);
+                    curr = self.symbols[curr.next as usize];
+                }
 
                 // Make sure we are not processing an expired queue entry
-                let target_new_pair = (self.symbols[top.pos].c, right.c);
+                let target_new_ngram = Ngram {ids: new_ids};
                 if merges
-                    .get(&target_new_pair)
+                    .get(&target_new_ngram)
                     .is_none_or(|(_, new_id)| *new_id != top.new_id)
                 {
                     continue;
                 }
 
-                // Otherwise, let's merge
-                self.symbols[top.pos].merge_with(&right, top.new_id);
-                // Tag the right part as removed
-                self.symbols[next_pos].len = 0;
+                // Otherwise, merge full ngram
+                let mut curr_pos = top.pos;
+                for _ in 0..top.length {
+                    // go to the next symbol 
+                    curr_pos = self.symbols[curr_pos].next as usize;
+                    let next_symbol = self.symbols[curr_pos];
+                    // Merge next symbol on to first symbol
+                    self.symbols[top.pos].merge_with(&next_symbol, top.new_id);
+                    // Tag the next symbol as removed
+                    self.symbols[curr_pos].len = 0;
+                }
 
                 // Update `prev` on the new `next` to the current pos
-                if right.next > -1 && (right.next as usize) < self.symbols.len() {
-                    self.symbols[right.next as usize].prev = top.pos as isize;
+                // access could be done using top.pos -> next, as after merges, it points to required next symbol
+                if self.symbols[curr_pos].next > -1 && (self.symbols[curr_pos].next as usize) < self.symbols.len() {
+                    let next_symbol = self.symbols[curr_pos];
+                    self.symbols[next_symbol.next as usize].prev = top.pos as isize;
                 }
 
-                // Insert the new pair formed with the previous symbol
-                let current = &self.symbols[top.pos];
-                if current.prev >= 0 {
-                    let prev = current.prev as usize;
-                    let prev_symbol = self.symbols[prev];
-                    let new_pair = (prev_symbol.c, current.c);
-                    if let Some((rank, new_id)) = merges.get(&new_pair) {
-                        queue.push(Merge {
-                            pos: current.prev as usize,
-                            rank: *rank,
-                            new_id: *new_id,
-                        });
-                    }
-                }
 
-                // Insert the new pair formed with the next symbol
-                let next = current.next as usize;
-                if next < self.symbols.len() {
-                    let next_symbol = self.symbols[next];
-                    let new_pair = (current.c, next_symbol.c);
-                    if let Some((rank, new_id)) = merges.get(&new_pair) {
-                        queue.push(Merge {
-                            pos: top.pos,
-                            rank: *rank,
-                            new_id: *new_id,
-                        });
+                let mut first_symbol_index = 0;
+                while self.symbols[first_symbol_index].len == 0 && first_symbol_index < self.symbols.len() {first_symbol_index += 1}
+                // Insert Ngrams formed from new symbol
+                while first_symbol_index <= top.pos {
+                    let mut last_symbol_index = top.pos;
+                    loop {
+
+                        // construct a vector of all the ids up to top.pos excluding it
+                        let mut ids: Vec<u32> = Vec::new();
+                        let mut id_to_insert = first_symbol_index;
+                        while id_to_insert <= last_symbol_index {
+                            ids.push(self.symbols[id_to_insert].c);
+                            id_to_insert = self.symbols[id_to_insert].next as usize;
+                        }
+
+                        let length = ids.len();
+                        let new_ngram = Ngram  {
+                            ids: ids
+                        };
+
+                        if let Some((rank, new_id)) = merges.get(&new_ngram) {
+                            queue.push(Merge {
+                                pos: first_symbol_index,
+                                rank: *rank,
+                                new_id: *new_id,
+                                length: length as u32
+                            });
+                        }
+
+                        // break the loop if the last element is reached
+                        if self.symbols[last_symbol_index].next == -1 {
+                            break;
+                        }
+                        last_symbol_index = self.symbols[last_symbol_index].next as usize;
                     }
+                    first_symbol_index = self.symbols[first_symbol_index].next as usize;
                 }
             }
         }
