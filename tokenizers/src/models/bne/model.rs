@@ -1,4 +1,4 @@
-use super::{super::OrderedVocabIter, trainer::BneTrainer, Error, Pair, Word};
+use super::{super::OrderedVocabIter, trainer::BneTrainer, Error, Pair, Word, Ngram};
 use crate::tokenizer::{Model, Result, Token};
 use crate::utils::cache::{Cache, DEFAULT_CACHE_CAPACITY, MAX_LENGTH};
 use crate::utils::iter::ResultShunt;
@@ -14,7 +14,7 @@ use std::{
 
 pub type Vocab = HashMap<String, u32>;
 type VocabR = HashMap<u32, String>;
-pub type MergeMap = HashMap<Pair, (u32, u32)>;
+pub type MergeMap = HashMap<Ngram, (u32, u32)>;
 pub type Merges = Vec<(String, String)>;
 
 struct Config {
@@ -170,7 +170,7 @@ impl BneBuilder {
             .merges
             .into_iter()
             .enumerate()
-            .map(|(i, (a, b))| -> Result<(Pair, (u32, u32))> {
+            .map(|(i, (a, b))| -> Result<(Ngram, (u32, u32))> {
                 let a_id = vocab
                     .get(&a)
                     .ok_or_else(|| Error::MergeTokenOutOfVocabulary(a.to_owned()))?;
@@ -547,10 +547,10 @@ impl Model for BNE {
             .iter()
             .collect();
         let mut merges_file = File::create(&merges_path)?;
-        let mut merges: Vec<(&Pair, &u32)> = self
+        let mut merges: Vec<(&Ngram, &u32)> = self
             .merges
             .iter()
-            .map(|(pair, (rank, _))| (pair, rank))
+            .map(|(ngram, (rank, _))| (ngram, rank))
             .collect();
         merges.sort_unstable_by_key(|k| *k.1);
         merges_file.write_all(b"#version: 0.2\n")?;
