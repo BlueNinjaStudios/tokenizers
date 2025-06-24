@@ -8,9 +8,8 @@ pub mod trainer;
 mod word;
 
 //TODO: Change to n-gram (maybe, pair of start + length)
-type Pair = (u32, u32);
 #[derive(Debug, Eq, Hash, Clone)]
-struct Ngram {
+pub struct Ngram {
     ids: Vec<u32>,
 }
 impl PartialEq for Ngram {
