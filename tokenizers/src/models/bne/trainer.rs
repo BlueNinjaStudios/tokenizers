@@ -180,7 +180,7 @@ impl BneTrainerBuilder {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 pub struct BneTrainer {
-    /// The minimum frequency a pair must have to produce a merge operation
+    /// The minimum frequency an Ngram must have to produce a merge operation
     pub min_frequency: u64,
     /// The target vocabulary size
     pub vocab_size: usize,
@@ -393,7 +393,7 @@ impl BneTrainer {
                             ids: Vec::from(window),
                         };
 
-                        // Initialize pair_counts and where_to_update for this pair if we just saw it
+                        // Initialize ngram_counts and where_to_update for this ngram if we just saw it
                         if !ngram_counts.contains_key(&cur_ngram) {
                             ngram_counts.insert(cur_ngram.clone(), 0);
                         }
@@ -417,9 +417,9 @@ impl BneTrainer {
             })
             .reduce(
                 || (HashMap::new(), HashMap::new()),
-                |(mut pair_counts, mut where_to_update), (pc, wtu)| {
+                |(mut ngram_counts, mut where_to_update), (pc, wtu)| {
                     for (k, v) in pc {
-                        pair_counts.entry(k).and_modify(|c| *c += v).or_insert(v);
+                        ngram_counts.entry(k).and_modify(|c| *c += v).or_insert(v);
                     }
                     for (k, v) in wtu {
                         where_to_update
@@ -427,7 +427,7 @@ impl BneTrainer {
                             .and_modify(|set| *set = set.union(&v).copied().collect())
                             .or_insert(v);
                     }
-                    (pair_counts, where_to_update)
+                    (ngram_counts, where_to_update)
                 },
             )
     }
@@ -462,7 +462,7 @@ impl BneTrainer {
         self.finalize_progress(&progress, words.len());
 
         //
-        // 4. Count pairs in words
+        // 4. Count Ngrams in words
         //
         self.update_progress(&progress, words.len(), "Count pairs");
         let (mut ngram_counts, mut where_to_update) = self.count_ngrams(&words, &counts, &progress);

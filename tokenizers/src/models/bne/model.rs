@@ -192,8 +192,6 @@ impl BneBuilder {
             })
             .collect::<Result<MergeMap>>()?;
 
-        // merges.insert(pair, (rank as u32, *new_id));
-
         Ok(BNE {
             vocab,
             vocab_r,
