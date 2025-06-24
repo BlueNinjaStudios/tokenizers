@@ -15,8 +15,8 @@ use std::{
 pub type Vocab = HashMap<String, u32>;
 type VocabR = HashMap<u32, String>;
 pub type MergeMap = HashMap<Ngram, (u32, u32)>;
-pub type Merges = Vec<(String, String)>;
-//pub type Merges = Vec<Vec<String>>
+//pub type Merges = Vec<(String, String)>;
+pub type Merges = Vec<Vec<String>>;
 
 struct Config {
     files: Option<(String, String)>,
@@ -171,18 +171,24 @@ impl BneBuilder {
             .merges
             .into_iter()
             .enumerate()
-            .map(|(i, (a, b))| -> Result<(Ngram, (u32, u32))> {
-                let a_id = vocab
-                    .get(&a)
-                    .ok_or_else(|| Error::MergeTokenOutOfVocabulary(a.to_owned()))?;
-                let b_id = vocab
-                    .get(&b)
-                    .ok_or_else(|| Error::MergeTokenOutOfVocabulary(b.to_owned()))?;
-                let new_token = format!("{}{}", a, &b[prefix_len..]);
+            .map(|(i, vec)| -> Result<(Ngram, (u32, u32))> {
+                let mut ids: Vec<u32> = Vec::with_capacity(vec.len());
+                for s in vec.iter() {
+                    ids.push(*vocab.get(s).ok_or_else(|| Error::MergeTokenOutOfVocabulary(s.to_owned()))?);
+                }
+                // remove continuing subword prefix
+                let mut token_vec = vec.clone();
+                for i in 1..token_vec.len() {
+                    let part_b = token_vec[i].clone();
+                    token_vec[i] = part_b[prefix_len..].to_string();
+                }
+                // create new token
+                let new_token = token_vec.join("");
+
                 let new_id = vocab
                     .get(&new_token)
                     .ok_or(Error::MergeTokenOutOfVocabulary(new_token))?;
-                Ok(((*a_id, *b_id), (i as u32, *new_id)))
+                Ok((Ngram {ids: ids}, (i as u32, *new_id)))
             })
             .collect::<Result<MergeMap>>()?;
 
@@ -285,13 +291,9 @@ pub(crate) fn convert_merges_to_hashmap<I: Iterator<Item = String>>(
     let mut merges = vec![];
 
     let lines = iter.filter(|l| !l.starts_with("#version"));
-    for (rank, line) in lines.enumerate() {
-        let parts = line.split(' ').collect::<Vec<_>>();
-        if parts.len() != 2 {
-            return Err(Error::BadMerges(rank + 1).into());
-        }
-
-        merges.push((parts[0].to_string(), parts[1].to_string()));
+    for (_, line) in lines.enumerate() {
+        let parts = line.split(' ').collect::<Vec<_>>().into_iter().map(|e| std::string::String::from(e)).collect();
+        merges.push(parts);
     }
 
     Ok(merges)
@@ -558,8 +560,8 @@ impl Model for BNE {
         merges_file.write_all(
             &merges
                 .into_iter()
-                .flat_map(|(pair, _)| {
-                    format!("{} {}\n", self.vocab_r[&pair.0], self.vocab_r[&pair.1]).into_bytes()
+                .flat_map(|(ngram, _)| {
+                    format!("{}\n", ngram.ids.iter().map(|id| self.vocab_r[&id].clone()).collect::<Vec<String>>().join(" ")).into_bytes()
                 })
                 .collect::<Vec<_>>()[..],
         )?;
