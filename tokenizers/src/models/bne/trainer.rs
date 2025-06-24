@@ -514,22 +514,22 @@ impl BneTrainer {
 
             // TODO: Check for moves
             // Build a new token
-            let mut token_vec: Vec<&String> = top.ngram.ids.iter().map(|id| &id_to_word[*id as usize]).collect();
+            let mut token_vec: Vec<String> = top.ngram.ids.iter().map(|id| id_to_word[*id as usize].clone()).collect();
 
             // Build new token
             // Remove continuing subword prefix from characters/tokens when stored as new token
 
             if let Some(prefix) = &self.continuing_subword_prefix {
                 for i in 1..token_vec.len() {
-                    let part_b = token_vec[i];
+                    let part_b = token_vec[i].clone();
                     if part_b.starts_with(prefix) {
                         let prefix_byte_len = prefix.chars().map(|c| c.len_utf8()).sum();
-                        token_vec[i] = &part_b.clone()[prefix_byte_len..].to_string();
+                        token_vec[i] = part_b[prefix_byte_len..].to_string();
                     }
                 }
             }
 
-            let new_token = token_vec.iter().map(|s|**s).collect().join();
+            let new_token = token_vec.join("");
             // implement sentencepiece-like merge.
             // if this code were to be merged, integrate a way in the python bindings to communicate this variable
             // default should be 0/None to maintain previous behavior. 16 is the spm default.
@@ -543,7 +543,7 @@ impl BneTrainer {
                 id_to_word.push(new_token.clone());
                 word_to_id.insert(new_token.clone(), new_token_id);
             }
-            merges.push((top.ngram, new_token_id));
+            merges.push((top.ngram.clone(), new_token_id));
 
             // Merge the new pair in every words
             // Safety: This is just a type assertion, the code below may no longer be safe
@@ -571,7 +571,7 @@ impl BneTrainer {
                         let word = word_start.0.add(i);
                         // let word: &mut Word = &mut (*word);
                         (*word)
-                            .merge(top.ngram.ids, new_token_id, max_token_length)
+                            .merge(top.ngram.clone().ids, new_token_id, max_token_length)
                             .into_iter()
                             .map(|c| (c, i))
                             .collect::<Vec<_>>()
@@ -584,7 +584,7 @@ impl BneTrainer {
             for ((ngram, change), iw) in changes {
                 let count = change * counts[iw] as i32;
                 ngram_counts
-                    .entry(ngram)
+                    .entry(ngram.clone())
                     .and_modify(|c| *c += count)
                     .or_insert(count);
                 if change > 0 {
