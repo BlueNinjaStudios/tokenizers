@@ -464,7 +464,7 @@ impl BneTrainer {
         //
         // 4. Count Ngrams in words
         //
-        self.update_progress(&progress, words.len(), "Count pairs");
+        self.update_progress(&progress, words.len(), "Count Ngrams");
         let (mut ngram_counts, mut where_to_update) = self.count_ngrams(&words, &counts, &progress);
         // Insert them in the queue
         let mut queue = BinaryHeap::with_capacity(ngram_counts.len());
@@ -545,7 +545,7 @@ impl BneTrainer {
             }
             merges.push((top.ngram.clone(), new_token_id));
 
-            // Merge the new pair in every words
+            // Merge the new ngram in every words
             // Safety: This is just a type assertion, the code below may no longer be safe
             // if the type of `pos` changes
             let pos: &HashSet<usize> = &top.pos;
@@ -579,7 +579,7 @@ impl BneTrainer {
                 })
                 .collect::<Vec<_>>();
 
-            // Introduce new formed pairs
+            // Introduce new formed Ngrams
             // TODO: Check if this works for ngrams and merging within ngrams
             for ((ngram, change), iw) in changes {
                 let count = change * counts[iw] as i32;
@@ -757,10 +757,10 @@ mod tests {
         .collect();
         assert_eq!(model.vocab, expected_vocab);
 
-        // The keys in `merges` are pairs of symbols, the values are tuples of (rank, id),
+        // The keys in `merges` are ngrams of symbols, the values are tuples of (rank, id),
         // where 'rank' determines the order in which this merge will be applied during
         // tokenization, and 'id' is the vocab id of the symbol resulting from merging
-        // the pair of symbols in the corresponding key.
+        // the ngram of symbols in the corresponding key.
         let expected_merges: HashMap<Ngram, (u32, u32)> = [
             ((17, 11), (0, 22)), // 'r' + 'e'  -> 're'
             ((8, 22), (1, 23)),  // 'a' + 're' -> 'are'
