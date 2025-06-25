@@ -54,6 +54,7 @@ impl Symbol {
         self.next = other.next;
     }
 
+    /*
     /// Merges the current Symbol with the vector of other symbols.
     /// Self is the left most symbol, all other symbols should be in order
     /// adjacent to self from left to right
@@ -64,6 +65,7 @@ impl Symbol {
             self.len += sym.len;
         }
     }
+    */
 }
 
 #[derive(Clone, Default)]
@@ -572,6 +574,7 @@ mod tests {
 
     }
 
+    /*
     #[test]
     fn test_merge_with_vec() {
         let mut sym = Symbol{
@@ -611,4 +614,5 @@ mod tests {
         assert_eq!(sym.next,8);
         assert_eq!(sym.len,5);
     }
+    */
 }
