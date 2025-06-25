@@ -154,15 +154,17 @@ impl Word {
                 // Remove all Ngrams containing a part of the symbol in the word
                 // Possibly optimize to reuse vecs for ngrams
                 for end_index in i..self.symbols.len() {
-                    let end = if i + c.len() - 1 < end_index-1 {i + c.len() - 1} else {end_index-1};
+                    let end = if i + c.len() < end_index {i + c.len()} else {end_index};
                     for start_index in 0..end {
                         let ngram_length = self.symbols[start_index..end_index+1].iter().fold(0, |acc, sym| acc + sym.len);
                         if ngram_length <= max_length {
-                            changes.push(
-                                (Ngram {
-                                    ids:self.symbols[start_index..end_index+1].iter().map(|elem| elem.c).collect()
-                                }, -1)
-                            );
+                            if start_index != i || end_index-start_index+1 !=c.len(){
+                                changes.push(
+                                    (Ngram {
+                                        ids:self.symbols[start_index..end_index+1].iter().map(|elem| elem.c).collect()
+                                    }, -1)
+                                );
+                            }
                         }
                     }
                 }
@@ -176,7 +178,7 @@ impl Word {
 
                 // Add back all Ngrams containing a the whole symbol as a token
                 for end_index in i..self.symbols.len() {
-                    let end = if i < end_index-1 {i} else {end_index-1};
+                    let end = if i+1 < end_index {i+1} else {end_index};
                     for start_index in 0..end {
                         let ngram_length = self.symbols[start_index..end_index+1].iter().fold(0, |acc, sym| acc + sym.len);
                         if ngram_length <= max_length {
@@ -197,7 +199,7 @@ impl Word {
     }
 
 
-    /// Unfinished for now!!
+    /// Merges all merges in the merge hashmap in a single word
     pub(super) fn merge_all(&mut self, merges: &HashMap<Ngram, (u32, u32)>, dropout: Option<f32>) {
         let mut queue = BinaryHeap::with_capacity(self.symbols.len()*(self.symbols.len()-1)/2);
         let mut skip = Vec::with_capacity(queue.len());
@@ -338,7 +340,7 @@ impl Word {
     }
 }
 
-/*
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,23 +372,83 @@ mod tests {
         );
 
         // The return value `changes` will be used to update the pair counts during
-        // training. This merge affects the counts for the pairs
-        // ('e', 'l') ~= (1, 2),
-        // ('e', 'll') ~= (1, 4),
-        // ('l', 'o') ~= (2, 3), and
-        // ('ll', 'o') ~= (4, 3).
-        // So the changes should reflect that:
         assert_eq!(
             changes,
             &[
-                ((1u32, 2u32), -1i32), // count for ('e', 'l') should be decreased by 1.
-                ((1u32, 4u32), 1i32),  // count for ('e', 'll') should be increased by 1.
-                ((2u32, 3u32), -1i32), // count for ('l', 'o') should be decreased by 1.
-                ((4u32, 3u32), 1i32),  // count for ('ll', 'o') should be increased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32]}, -1i32),          // count for ('e', 'l') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l', 'l') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32, 2u32]}, -1i32),    // count for ('e', 'l', 'l') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('h', 'e', 'l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('e', 'l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 2u32, 3u32]}, -1i32),    // count for ('l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 3u32]}, -1i32),    // count for ('l', 'o') should be decreased by 1.
+
+                (Ngram {ids:vec![0u32, 1u32, 4u32]}, 1i32),  // count for ('h', 'e', 'll') should be increased by 1.
+                (Ngram {ids:vec![1u32, 4u32]}, 1i32),  // count for ('e', 'll') should be increased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 4u32, 3u32]}, 1i32),  // count for ('h', 'e', 'll', 'o') should be increased by 1.
+                (Ngram {ids:vec![1u32, 4u32, 3u32]}, 1i32),  // count for ('e', 'll','o') should be increased by 1.
+                (Ngram {ids:vec![4u32, 3u32]}, 1i32),  // count for ('ll','o') should be increased by 1.
             ]
         );
     }
 
+    #[test]
+    fn test_merge_2() {
+        // Let's say we have the word 'hello' and a word-to-id vocab that looks
+        // like this: {'h': 0, 'e': 1, 'l': 2, 'o': 3, '!': 4}.
+        let mut word = Word::new();
+        word.add(0, 1); // 'h'
+        word.add(1, 1); // 'e'
+        word.add(2, 1); // 'l'
+        word.add(2, 1); // 'l'
+        word.add(3, 1); // 'o'
+        word.add(4, 1); // '!'
+
+        // We're going to perform a merge on the ngram ('e', 'l', 'l') ~= [1, 2, 2)] Let's
+        // say that 'ell' has the ID of 5 in the updated word-to-id vocab.
+        let changes = word.merge(vec![1,2,2], 5, usize::MAX);
+
+        // So the word should now look like this:
+        assert_eq!(
+            word.get_chars(),
+            &[
+                0u32, // 'h'
+                5u32, // 'ell'
+                3u32, // 'o'
+                4u32  // '!'
+            ]
+        );
+
+        // The return value `changes` will be used to update the pair counts during
+        assert_eq!(
+            changes,
+            &[
+                (Ngram {ids:vec![0u32, 1u32]}, -1i32),    // count for ('h', 'e') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32]}, -1i32),          // count for ('e', 'l') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l', 'l') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 2u32]}, -1i32),    // count for ('l', 'l') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('h', 'e', 'l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('e', 'l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 2u32, 3u32]}, -1i32),    // count for ('l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 3u32]}, -1i32),    // count for ('l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![0u32, 1u32, 2u32, 2u32, 3u32, 4u32]}, -1i32),    // count for ('h', 'e', 'l', 'l', 'o', '!') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32, 2u32, 3u32, 4u32]}, -1i32),    // count for ('e', 'l', 'l', 'o', '!') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 2u32, 3u32, 4u32]}, -1i32),    // count for ('l', 'l', 'o', '!') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 3u32, 4u32]}, -1i32),    // count for ('l', 'o', '!') should be decreased by 1.
+
+
+                (Ngram {ids:vec![0u32, 5u32]}, 1i32),  // count for ('h', 'ell') should be increased by 1.
+                (Ngram {ids:vec![0u32, 5u32, 3u32]}, 1i32),  // count for ('h', 'ell', 'o') should be increased by 1.
+                (Ngram {ids:vec![5u32, 3u32]}, 1i32),  // count for ('ell','o') should be increased by 1.
+                (Ngram {ids:vec![0u32, 5u32, 3u32, 4u32]}, 1i32),  // count for ('h', 'ell', 'o', '!') should be increased by 1.
+                (Ngram {ids:vec![5u32, 3u32, 4u32]}, 1i32),  // count for ('ell','o', '!') should be increased by 1.
+            ]
+        );
+    }
+
+    /*
     #[test]
     fn test_merge_max_length() {
         // Let's say we have the word 'hello' and a word-to-id vocab that looks
@@ -420,6 +482,5 @@ mod tests {
                                        // ((4u32, 3u32), 1i32), Missing since this would be larger than 2
             ]
         );
-    }
+    }*/
 }
-*/
