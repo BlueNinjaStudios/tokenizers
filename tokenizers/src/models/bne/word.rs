@@ -335,6 +335,12 @@ impl Word {
         self.symbols.iter().map(|s| s.c).collect()
     }
 
+    /*
+    pub(super) fn get_char_len(&self) -> Vec<usize> {
+        self.symbols.iter().map(|s| s.len).collect()
+    }
+    */
+
     pub(super) fn get_chars_iter(&self) -> impl Iterator<Item = u32> + '_ {
         self.symbols.iter().map(|s| s.c)
     }
