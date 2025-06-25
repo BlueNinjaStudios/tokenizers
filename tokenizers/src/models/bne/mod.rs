@@ -1,6 +1,7 @@
 //! [Byte n-gram Encoding]
 use std::{iter, mem};
 use std::cmp::Ordering;
+use std::fmt;
 
 mod model;
 mod serialization;
@@ -42,7 +43,13 @@ impl Ord for Ngram {
         }
     }
 }
-
+// For testing purposes
+impl fmt::Display for Ngram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ngram = self.clone();
+        write!(f, "Ngram: ids[{}]", ngram.ids.iter().map(|id| id.to_string()).collect::<Vec<String>>().join(", "))
+    }
+}
 /// Errors that can be encountered while using or constructing a `BNE` model.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -115,3 +122,18 @@ where
 pub use model::*;
 pub use trainer::*;
 use word::*;
+
+/*
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ngram_fmt() {
+        let a = Ngram {
+            ids: vec![1, 2, 5, 3, 5]
+        };
+        assert_eq!("Ngram: ids[1, 2, 5, 3, 5]", a.to_string());
+    }
+}
+*/
