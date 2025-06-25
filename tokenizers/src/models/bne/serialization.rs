@@ -155,7 +155,7 @@ impl<'de> Visitor<'de> for BNEVisitor {
     }
 }
 
-/*
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -173,7 +173,7 @@ mod test {
         .cloned()
         .collect();
         let bne = BneBuilder::default()
-            .vocab_and_merges(vocab, vec![("a".to_string(), "b".to_string())])
+            .vocab_and_merges(vocab, vec![vec!["a".to_string(), "b".to_string()]])
             .unk_token("<unk>".to_string())
             .ignore_merges(true)
             .build()
@@ -202,7 +202,7 @@ mod test {
         .cloned()
         .collect();
         let bne = BneBuilder::default()
-            .vocab_and_merges(vocab, vec![("a".to_string(), "b c d".to_string())])
+            .vocab_and_merges(vocab, vec![vec!["a".to_string(), "b c d".to_string()]])
             .unk_token("<unk>".to_string())
             .ignore_merges(true)
             .build()
@@ -237,4 +237,3 @@ mod test {
         assert_eq!(serde_json::from_str::<BNE>(bne_string).unwrap(), bne);
     }
 }
-*/
