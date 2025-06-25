@@ -594,7 +594,6 @@ mod tests {
         assert_eq!(serialized, "{\"a\":0,\"b\":1,\"c\":2,\"ab\":3}");
     }
 
-    /*
     #[test]
     fn test_unk_not_fused() {
         let vocab: Vocab = [("<unk>".into(), 0), ("a".into(), 1), ("b".into(), 2)]
@@ -629,9 +628,7 @@ mod tests {
             ]
         );
     }
-    */
 
-    /*
     #[test]
     fn test_unk_get_fused() {
         let vocab: Vocab = [("<unk>".into(), 0), ("a".into(), 1), ("b".into(), 2)]
@@ -660,14 +657,14 @@ mod tests {
             ]
         );
     }
-    */
 
-    /*
     #[test]
     // Test tokenization. With dropout set to 0 tokenization is deterministic,
     // so we know exactly what the result should be.
     //
     // To test this, we'll build a simple model to tokenize the word 'unrelated'.
+
+    // TODO: add more test like this with longer merges
     fn test_tokenize_with_and_without_dropout() {
         let vocab: Vocab = [
             ("u".into(), 0),
@@ -691,14 +688,14 @@ mod tests {
         .cloned()
         .collect();
         let merges: Merges = vec![
-            ("r".to_string(), "e".to_string()),
-            ("a".to_string(), "t".to_string()),
-            ("e".to_string(), "d".to_string()),
-            ("u".to_string(), "n".to_string()),
-            ("at".to_string(), "ed".to_string()),
-            ("re".to_string(), "l".to_string()),
-            ("rel".to_string(), "ated".to_string()),
-            ("un".to_string(), "related".to_string()),
+            vec!["r".to_string(), "e".to_string()],
+            vec!["a".to_string(), "t".to_string()],
+            vec!["e".to_string(), "d".to_string()],
+            vec!["u".to_string(), "n".to_string()],
+            vec!["at".to_string(), "ed".to_string()],
+            vec!["re".to_string(), "l".to_string()],
+            vec!["rel".to_string(), "ated".to_string()],
+            vec!["un".to_string(), "related".to_string()],
         ];
         let mut bne = BNE::new(vocab, merges);
 
@@ -734,9 +731,7 @@ mod tests {
         let tokens = bne.tokenize("unrelated").unwrap();
         assert!(!tokens.is_empty() && tokens.len() <= 9);
     }
-    */
 
-    /*
     #[test]
     // Ensure `BNE::from_file` works as expected.
     fn test_bne_from_file() {
@@ -758,7 +753,7 @@ mod tests {
         let bne = builder.build().unwrap();
 
         // Check merges.
-        assert_eq!(bne.merges.get(&(0, 1)).unwrap(), &(0u32, 3u32));
+        assert_eq!(bne.merges.get(&Ngram{ids: vec![0, 1]}).unwrap(), &(0u32, 3u32));
 
         // Check vocab.
         assert_eq!(bne.vocab.get("a").unwrap(), &0u32);
@@ -766,16 +761,13 @@ mod tests {
         assert_eq!(bne.vocab.get("c").unwrap(), &2u32);
         assert_eq!(bne.vocab.get("ab").unwrap(), &3u32);
     }
-    */
 
-    /*
     #[test]
     // Ensure BNEBuilder with dropout = 0.0 doesn't error
     fn test_bne_with_dropout_0() {
         let bne = BNE::builder().dropout(0.0).build().unwrap();
         assert_eq!(bne.dropout, Some(0.0));
     }
-    */
 
     /*
     #[test]
