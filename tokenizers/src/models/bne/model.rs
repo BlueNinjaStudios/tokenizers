@@ -769,7 +769,8 @@ mod tests {
         assert_eq!(bne.dropout, Some(0.0));
     }
 
-    /*
+    // TODO: continue work here!
+    // Error!!
     #[test]
     // Ensure `BNE::from_file` works as expected.
     fn test_bne_with_continuing_subword_prefix() {
@@ -784,8 +785,8 @@ mod tests {
         .collect();
 
         let merges = vec![
-            ("a".to_string(), "##b".to_string()),
-            ("ab".to_string(), "##c".to_string()),
+            vec!["a".to_string(), "##b".to_string()],
+            vec!["ab".to_string(), "##c".to_string()],
         ];
 
         let bne = BNE::builder()
@@ -814,9 +815,7 @@ mod tests {
             }]
         );
     }
-    */
 
-    /*
     #[test]
     // Ensure `MergeTokenOutOfVocabulary` error is returned when it should be.
     fn test_bne_from_file_merge_token_oov() {
@@ -846,9 +845,9 @@ mod tests {
             },
         }
     }
-    */
 
-    /*
+    // TODO: continue work here!
+    // Error!!
     #[test]
     // Ensure `BadMerges` error is returned when there is an invalid line in the
     // merges.txt file.
@@ -877,9 +876,7 @@ mod tests {
             },
         }
     }
-    */
 
-    /*
     #[test]
     fn test_bne_byte_fallback() {
         // 0x61 == 'a' in bytes
@@ -899,9 +896,7 @@ mod tests {
         let tokens = bne.tokenize("a").unwrap();
         assert_eq!(tokens, vec![Token::new(1u32, "<0x61>".into(), (0, 1)),]);
     }
-    */
 
-    /*
     #[test]
     fn test_bne_byte_fallback_newline() {
         // 0x0A == '\n' in bytes
@@ -918,9 +913,7 @@ mod tests {
         let tokens = bne.tokenize("\n").unwrap();
         assert_eq!(tokens, vec![Token::new(1u32, "<0x0A>".into(), (0, 1)),]);
     }
-    */
 
-    /*
     #[test]
     fn test_ignore_merges() {
         // 0x0A == '\n' in bytes
@@ -956,14 +949,14 @@ mod tests {
             .vocab_and_merges(
                 vocab,
                 vec![
-                    (".".into(), ":".into()),
-                    ("b".into(), "e".into()),
-                    ("be".into(), "l".into()),
-                    ("i".into(), "r".into()),
-                    ("t".into(), "i".into()),
-                    ("ir".into(), "ti".into()),
-                    ("e".into(), "n".into()),
-                    ("irti".into(), "l".into()),
+                    vec![".".into(), ":".into()],
+                    vec!["b".into(), "e".into()],
+                    vec!["be".into(), "l".into()],
+                    vec!["i".into(), "r".into()],
+                    vec!["t".into(), "i".into()],
+                    vec!["ir".into(), "ti".into()],
+                    vec!["e".into(), "n".into()],
+                    vec!["irti".into(), "l".into()],
                 ],
             )
             .ignore_merges(true)
@@ -1016,5 +1009,4 @@ mod tests {
             ]
         )
     }
-    */
 }
