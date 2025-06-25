@@ -872,9 +872,9 @@ mod tests {
         assert_eq!(model.merges, expected_merges);
     }
 
-    /*
+    
     #[test]
-    fn bpe_test_max_token_length_16() {
+    fn bne_test_max_token_length_16() {
         /* bpe_test_max_token_length series of tests test the max_token_length flag of BneTrainer
         // this is the more robust version that only tests max length of learned tokens
         // (pre) tokenizer settings or vocab can be easily modified when necessary
@@ -915,10 +915,9 @@ mod tests {
             )
         }
     }
-    */
-    /*
+    
     #[test]
-    fn bpe_test_max_token_length_direct_assert() {
+    fn bne_test_max_token_length_direct_assert() {
         /* more direct version of bpe_test_max_token_length test
         // directly compares tokens with known expected values.
         // maybe unstable depending on specific settings or changes.
@@ -986,5 +985,5 @@ mod tests {
         .collect();
         assert_eq!(trained_vocab, expected_vocab)
     }
-    */
+    
 }
