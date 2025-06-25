@@ -54,8 +54,9 @@ impl Symbol {
         self.next = other.next;
     }
 
-    /// TODO:   Check if vector is necessary (alt. array)
-    ///         Check if iter is necessary (alt. just leave it)
+    /// Merges the current Symbol with the vector of other symbols.
+    /// Self is the left most symbol, all other symbols should be in order
+    /// adjacent to self from left to right
     pub fn merge_with_vec(&mut self, other: Vec<&Self>, new_c: u32) {
         self.c = new_c;
         self.next = other[other.len()-1].next; // last mut
@@ -569,5 +570,45 @@ mod tests {
     #[test]
     fn test_merge_all_dropout() {
 
+    }
+
+    #[test]
+    fn test_merge_with_vec() {
+        let mut sym = Symbol{
+            c: 0,
+            prev: -1,
+            next: 1,
+            len: 1,
+        };
+
+        let sym1 = Symbol{
+            c: 1,
+            prev: 0,
+            next: 3,
+            len: 2,
+        };
+
+        let sym2 = Symbol{
+            c: 3,
+            prev: 1,
+            next: 4,
+            len: 1,
+        };
+
+        let sym3 = Symbol{
+            c: 4,
+            prev: 3,
+            next: 8,
+            len: 1,
+        };
+
+        let symbols = vec![&sym1, &sym2, &sym3];
+
+        sym.merge_with_vec(symbols, 10);
+
+        assert_eq!(sym.c,10);
+        assert_eq!(sym.prev,-1);
+        assert_eq!(sym.next,8);
+        assert_eq!(sym.len,5);
     }
 }
