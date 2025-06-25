@@ -572,7 +572,7 @@ impl Model for BNE {
     }
 }
 
-/*
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -594,6 +594,7 @@ mod tests {
         assert_eq!(serialized, "{\"a\":0,\"b\":1,\"c\":2,\"ab\":3}");
     }
 
+    /*
     #[test]
     fn test_unk_not_fused() {
         let vocab: Vocab = [("<unk>".into(), 0), ("a".into(), 1), ("b".into(), 2)]
@@ -628,6 +629,9 @@ mod tests {
             ]
         );
     }
+    */
+
+    /*
     #[test]
     fn test_unk_get_fused() {
         let vocab: Vocab = [("<unk>".into(), 0), ("a".into(), 1), ("b".into(), 2)]
@@ -656,7 +660,9 @@ mod tests {
             ]
         );
     }
+    */
 
+    /*
     #[test]
     // Test tokenization. With dropout set to 0 tokenization is deterministic,
     // so we know exactly what the result should be.
@@ -728,7 +734,9 @@ mod tests {
         let tokens = bne.tokenize("unrelated").unwrap();
         assert!(!tokens.is_empty() && tokens.len() <= 9);
     }
+    */
 
+    /*
     #[test]
     // Ensure `BNE::from_file` works as expected.
     fn test_bne_from_file() {
@@ -758,14 +766,18 @@ mod tests {
         assert_eq!(bne.vocab.get("c").unwrap(), &2u32);
         assert_eq!(bne.vocab.get("ab").unwrap(), &3u32);
     }
+    */
 
+    /*
     #[test]
     // Ensure BNEBuilder with dropout = 0.0 doesn't error
     fn test_bne_with_dropout_0() {
         let bne = BNE::builder().dropout(0.0).build().unwrap();
         assert_eq!(bne.dropout, Some(0.0));
     }
+    */
 
+    /*
     #[test]
     // Ensure `BNE::from_file` works as expected.
     fn test_bne_with_continuing_subword_prefix() {
@@ -810,7 +822,9 @@ mod tests {
             }]
         );
     }
+    */
 
+    /*
     #[test]
     // Ensure `MergeTokenOutOfVocabulary` error is returned when it should be.
     fn test_bne_from_file_merge_token_oov() {
@@ -840,7 +854,9 @@ mod tests {
             },
         }
     }
+    */
 
+    /*
     #[test]
     // Ensure `BadMerges` error is returned when there is an invalid line in the
     // merges.txt file.
@@ -869,7 +885,9 @@ mod tests {
             },
         }
     }
+    */
 
+    /*
     #[test]
     fn test_bne_byte_fallback() {
         // 0x61 == 'a' in bytes
@@ -889,7 +907,9 @@ mod tests {
         let tokens = bne.tokenize("a").unwrap();
         assert_eq!(tokens, vec![Token::new(1u32, "<0x61>".into(), (0, 1)),]);
     }
+    */
 
+    /*
     #[test]
     fn test_bne_byte_fallback_newline() {
         // 0x0A == '\n' in bytes
@@ -906,7 +926,9 @@ mod tests {
         let tokens = bne.tokenize("\n").unwrap();
         assert_eq!(tokens, vec![Token::new(1u32, "<0x0A>".into(), (0, 1)),]);
     }
+    */
 
+    /*
     #[test]
     fn test_ignore_merges() {
         // 0x0A == '\n' in bytes
@@ -1002,5 +1024,5 @@ mod tests {
             ]
         )
     }
+    */
 }
-*/
