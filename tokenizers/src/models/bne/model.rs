@@ -733,6 +733,66 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_with_and_without_dropout_2() {
+        let vocab: Vocab = [
+            ("u".into(), 0),
+            ("n".into(), 1),
+            ("r".into(), 2),
+            ("e".into(), 3),
+            ("l".into(), 4),
+            ("a".into(), 5),
+            ("t".into(), 6),
+            ("d".into(), 7),
+            ("ated".into(), 8),
+            ("un".into(), 9),
+            ("rel".into(), 10),
+            ("unrelated".into(), 11),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        let merges: Merges = vec![
+            vec!["a".to_string(), "t".to_string(), "e".to_string(), "d".to_string()],
+            vec!["u".to_string(), "n".to_string()],
+            vec!["r".to_string(), "e".to_string(), "l".to_string()],
+            vec!["un".to_string(), "rel".to_string(), "ated".to_string()],
+        ];
+        let mut bne = BNE::new(vocab, merges);
+
+        // With no dropout:
+        let tokens = bne.tokenize("unrelated").unwrap();
+        assert_eq!(tokens, vec![Token::new(11u32, "unrelated".into(), (0, 9))]);
+
+        // With dropout = 0.0 (equivalent to dropout == none)
+        bne.dropout = Some(0.0);
+        let tokens = bne.tokenize("unrelated").unwrap();
+        assert_eq!(tokens, vec![Token::new(11u32, "unrelated".into(), (0, 9))]);
+
+        // Now set dropout to 1.0. Result should be no merges performed.
+        bne.dropout = Some(1.0);
+        let tokens = bne.tokenize("unrelated").unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(0u32, "u".into(), (0, 1)),
+                Token::new(1u32, "n".into(), (1, 2)),
+                Token::new(2u32, "r".into(), (2, 3)),
+                Token::new(3u32, "e".into(), (3, 4)),
+                Token::new(4u32, "l".into(), (4, 5)),
+                Token::new(5u32, "a".into(), (5, 6)),
+                Token::new(6u32, "t".into(), (6, 7)),
+                Token::new(3u32, "e".into(), (7, 8)),
+                Token::new(7u32, "d".into(), (8, 9)),
+            ]
+        );
+
+        // Now try with dropout between 0 and 1.
+        bne.dropout = Some(0.5);
+        let tokens = bne.tokenize("unrelated").unwrap();
+        assert!(!tokens.is_empty() && tokens.len() <= 9);
+    }
+
+    #[test]
     // Ensure `BNE::from_file` works as expected.
     fn test_bne_from_file() {
         // Set up vocab file.
