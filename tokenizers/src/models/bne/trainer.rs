@@ -42,6 +42,7 @@ impl Ord for Merge {
 
 struct Config {
     min_frequency: u64,
+    min_scale_frequency: u64,
     vocab_size: usize,
     show_progress: bool,
     special_tokens: Vec<AddedToken>,
@@ -63,6 +64,7 @@ impl Default for BneTrainerBuilder {
         Self {
             config: Config {
                 min_frequency: 0,
+                min_scale_frequency: 0,
                 vocab_size: 30000,
                 show_progress: true,
                 special_tokens: vec![],
@@ -86,6 +88,13 @@ impl BneTrainerBuilder {
     #[must_use]
     pub fn min_frequency(mut self, frequency: u64) -> Self {
         self.config.min_frequency = frequency;
+        self
+    }
+
+    /// Set the expected minimum scale frequency
+    #[must_use]
+    pub fn min_scale_frequency(mut self, frequency: u64) -> Self {
+        self.config.min_scale_frequency = frequency;
         self
     }
 
@@ -148,6 +157,7 @@ impl BneTrainerBuilder {
     pub fn build(self) -> BneTrainer {
         BneTrainer {
             min_frequency: self.config.min_frequency,
+            min_scale_frequency: self.config.min_scale_frequency,
             vocab_size: self.config.vocab_size,
             show_progress: self.config.show_progress,
             special_tokens: self.config.special_tokens,
@@ -182,6 +192,9 @@ impl BneTrainerBuilder {
 pub struct BneTrainer {
     /// The minimum frequency an Ngram must have to produce a merge operation
     pub min_frequency: u64,
+    /// The minimum length scaled frequency an Ngram must have to produce a merge
+    /// both min_frequency and min_scale_frequency must be fulfilled for a merge to occur
+    pub min_scale_frequency: u64,
     /// The target vocabulary size
     pub vocab_size: usize,
     /// Whether to show progress while training
@@ -210,9 +223,10 @@ impl Default for BneTrainer {
 }
 
 impl BneTrainer {
-    pub fn new(min_frequency: u64, vocab_size: usize) -> Self {
+    pub fn new(min_frequency: u64, min_scale_frequency: u64, vocab_size: usize) -> Self {
         Self {
             min_frequency,
+            min_scale_frequency,
             vocab_size,
             ..Default::default()
         }
@@ -506,13 +520,16 @@ impl BneTrainer {
                 queue.push(top);
                 continue;
             }
-
-            // Stop if top count is too small (does not exceede min frequency)
-            if top.count < 1 || self.min_frequency > top.count {
+            // Stop if top count scaled is too small (does not exceed min scale frequency)
+            if top.count < 1 || self.min_scale_frequency > top.count * (top.length-1) {
                 break;
             }
 
-            // TODO: Check for moves
+            // Skip ngram if top count is too small (does not exceede min frequency)
+            if top.count < 1 || self.min_frequency > top.count {
+                continue;
+            }
+
             // Build a new token
             let mut token_vec: Vec<String> = top.ngram.ids.iter().map(|id| id_to_word[*id as usize].clone()).collect();
 
