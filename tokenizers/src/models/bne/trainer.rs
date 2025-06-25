@@ -401,8 +401,11 @@ impl BneTrainer {
                 
                 // change windowsize depending on word size
                 let max_ngram_len = if self.max_token_length.unwrap_or(usize::MAX) < word.get_chars().len() {self.max_token_length.unwrap_or(usize::MAX)} else {word.get_chars().len()};
-                for ngram_len in 2..max_ngram_len { 
+                for ngram_len in 2..max_ngram_len + 1 { 
                     for window in word.get_chars().windows(ngram_len) {
+                        // TODO: continue if exceeding max ngram length, expose function in word
+                        // Check if there are any characters with len > 1 at this point..
+
                         let cur_ngram= Ngram {
                             ids: Vec::from(window),
                         };
@@ -457,15 +460,32 @@ impl BneTrainer {
 
         let progress = self.setup_progress();
 
+        //println!("Start of do_train");
+
         //
         // 1. Add all special tokens to the vocabulary
         //
         self.add_special_tokens(&mut word_to_id, &mut id_to_word);
 
+        //println!("added special tokens");
+
         //
         // 2. Compute the initial alphabet
         //
         self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
+
+        /*
+        println!("computed alphabet");
+        let w2id_c = word_to_id.clone();
+        println!("word_to_id map:");
+        for k in w2id_c.keys() {println!("({} -> {})", k, w2id_c.get(k).unwrap_or(&0))}
+        println!("id_to_word vector:");
+        let id2w_c = id_to_word.clone();
+        println!("[{}]", id2w_c.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", "));
+        println!("word_counts map:");
+        let word_counts_c = word_counts.clone();
+        for k in word_counts_c.keys() {println!("({} -> {})", k, word_counts_c.get(k).unwrap_or(&0))}
+        */
 
         //
         // 3. Tokenize words
@@ -475,11 +495,20 @@ impl BneTrainer {
             self.tokenize_words(word_counts, &mut word_to_id, &mut id_to_word, &progress);
         self.finalize_progress(&progress, words.len());
 
+        //println!("tokenized words");
         //
         // 4. Count Ngrams in words
         //
         self.update_progress(&progress, words.len(), "Count Ngrams");
         let (mut ngram_counts, mut where_to_update) = self.count_ngrams(&words, &counts, &progress);
+        
+        /*
+        println!("counted ngrams");
+        println!("ngram_counts map:");
+        let ngram_counts_c = ngram_counts.clone();
+        for k in ngram_counts_c.keys() {println!("([{}] -> {})", k.ids.iter().map(|id| id2w_c[*id as usize].clone()).collect::<Vec<String>>().join(", "), ngram_counts_c.get(k).unwrap_or(&0))}
+        */
+
         // Insert them in the queue
         let mut queue = BinaryHeap::with_capacity(ngram_counts.len());
         where_to_update.drain().for_each(|(ngram, pos)| {
@@ -497,6 +526,8 @@ impl BneTrainer {
         });
         self.finalize_progress(&progress, words.len());
 
+        //println!("setup queue");
+
         //
         // 5. Do merges
         //
@@ -504,6 +535,7 @@ impl BneTrainer {
         let mut merges: Vec<(Ngram, u32)> = vec![];
         loop {
             // Stop as soon as we have a big enough vocabulary
+            //println!("word_to_id.len() {} < self.vocab_size {}", word_to_id.len(), self.vocab_size);
             if word_to_id.len() >= self.vocab_size {
                 break;
             }
@@ -515,6 +547,7 @@ impl BneTrainer {
 
             // If top Merge score is not accurate, update it
             let mut top = queue.pop().unwrap();
+            // println!("top: ngram: {}, count: {}, length: {}", top.ngram.clone(), top.count, top.length);
             if top.count != ngram_counts[&top.ngram] as u64 {
                 top.count = ngram_counts[&top.ngram] as u64;
                 queue.push(top);
@@ -535,7 +568,6 @@ impl BneTrainer {
 
             // Build new token
             // Remove continuing subword prefix from characters/tokens when stored as new token
-
             if let Some(prefix) = &self.continuing_subword_prefix {
                 for i in 1..token_vec.len() {
                     let part_b = token_vec[i].clone();
@@ -709,7 +741,7 @@ impl Trainer for BneTrainer {
     }
 }
 
-/*
+
 #[cfg(test)]
 mod tests {
     use super::{BneTrainer, Ngram, BNE};
@@ -765,9 +797,8 @@ mod tests {
             ("t".into(), 19),
             ("u".into(), 20),
             ("v".into(), 21),
-            ("re".into(), 22),
-            ("are".into(), 23),
-            ("is".into(), 24),
+            ("are".into(), 22),
+            ("is".into(), 23),
         ]
         .iter()
         .cloned()
@@ -779,15 +810,69 @@ mod tests {
         // tokenization, and 'id' is the vocab id of the symbol resulting from merging
         // the ngram of symbols in the corresponding key.
         let expected_merges: HashMap<Ngram, (u32, u32)> = [
-            ((17, 11), (0, 22)), // 'r' + 'e'  -> 're'
-            ((8, 22), (1, 23)),  // 'a' + 're' -> 'are'
-            ((13, 18), (2, 24)), // 'i' + 's'  -> 'is'
+            (Ngram {ids: vec![8, 17, 11]}, (0, 22)), // 'a' + 'r' + 'e'  -> 'are'
+            (Ngram {ids: vec![13, 18]}, (1, 23)), // 'i' + 's'  -> 'is'
         ]
         .iter()
         .cloned()
         .collect();
         assert_eq!(model.merges, expected_merges);
     }
+
+    #[test]
+    fn test_train_2() {
+        let word_counts: HashMap<String, u64> = [
+            ("abcde".into(), 2),
+            ("cd".into(), 50),
+            ("bcdef".into(), 2),
+            ("abcdef".into(), 1),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        let trainer = BneTrainer::builder()
+            .show_progress(false)
+            .min_frequency(2)
+            .build();
+        let mut model = BNE::default();
+        trainer.do_train(&word_counts, &mut model).unwrap();
+
+        // Vocab should contain all of the characters from the `word_counts` mapping
+        // as well as three merges: 're', 'are', and 'is'.
+        let expected_vocab: HashMap<String, u32> = [
+            ("a".into(), 0),
+            ("b".into(), 1),
+            ("c".into(), 2),
+            ("d".into(), 3),
+            ("e".into(), 4),
+            ("f".into(), 5),
+            ("cd".into(), 6),
+            ("bcde".into(), 7),
+            ("abcde".into(), 8),
+            ("bcdef".into(), 9),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(model.vocab, expected_vocab);
+
+        // The keys in `merges` are ngrams of symbols, the values are tuples of (rank, id),
+        // where 'rank' determines the order in which this merge will be applied during
+        // tokenization, and 'id' is the vocab id of the symbol resulting from merging
+        // the ngram of symbols in the corresponding key.
+        let expected_merges: HashMap<Ngram, (u32, u32)> = [
+            (Ngram {ids: vec![2, 3]}, (0, 6)),
+            (Ngram {ids: vec![1, 6, 4]}, (1, 7)),
+            (Ngram {ids: vec![0, 7]}, (2, 8)),
+            (Ngram {ids: vec![7, 5]}, (3, 9)),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(model.merges, expected_merges);
+    }
+
+    /*
     #[test]
     fn bpe_test_max_token_length_16() {
         /* bpe_test_max_token_length series of tests test the max_token_length flag of BneTrainer
@@ -830,6 +915,8 @@ mod tests {
             )
         }
     }
+    */
+    /*
     #[test]
     fn bpe_test_max_token_length_direct_assert() {
         /* more direct version of bpe_test_max_token_length test
@@ -899,5 +986,5 @@ mod tests {
         .collect();
         assert_eq!(trained_vocab, expected_vocab)
     }
+    */
 }
-*/
