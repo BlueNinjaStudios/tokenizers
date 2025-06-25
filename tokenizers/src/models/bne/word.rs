@@ -241,12 +241,19 @@ impl Word {
                     continue;
                 }
 
+                //println!("top.pos: {}", top.pos);
+                //println!("new_ids with len: {}", top.length);
+                //print!("[");
+
                 let mut new_ids: Vec<u32> = Vec::with_capacity(top.length as usize);
                 let mut curr = self.symbols[top.pos];
-                for _ in 0..top.length {
+                for _ in 0..top.length-1 {
                     new_ids.push(curr.c);
+                    //print!("{}, ", curr.c);
                     curr = self.symbols[curr.next as usize];
                 }
+                new_ids.push(curr.c);
+                //println!("{}]", curr.c);
 
                 // Make sure we are not processing an expired queue entry
                 let target_new_ngram = Ngram {ids: new_ids};
@@ -259,7 +266,7 @@ impl Word {
 
                 // Otherwise, merge full ngram
                 let mut curr_pos = top.pos;
-                for _ in 0..top.length {
+                for _ in 0..top.length-1 {
                     // go to the next symbol 
                     curr_pos = self.symbols[curr_pos].next as usize;
                     let next_symbol = self.symbols[curr_pos];
@@ -531,5 +538,36 @@ mod tests {
                 4u32, // '!'
             ]
         );
-    }*/
+    }
+
+    #[test]
+    fn test_merge_all_2() {
+        let mut word = Word::new();
+        word.add(0, 1); // 'h'
+        word.add(1, 1); // 'e'
+        word.add(2, 1); // 'l'
+        word.add(2, 1); // 'l'
+        word.add(3, 1); // 'o'
+        word.add(4, 1); // '!'
+
+        let mut merges: HashMap<Ngram, (u32, u32)> = HashMap::new();
+        merges.insert(Ngram{ids:vec![2, 2]}, (0, 5));       // merge 'l', 'l' -> 'll' (rank: 0, id: 5)
+        merges.insert(Ngram{ids:vec![5, 3, 4]}, (1, 6));    // merge 'll', 'o', '!' -> 'llo!' (rank: 1, id: 6)
+
+        word.merge_all(&merges, None);
+        
+        assert_eq!(
+            word.get_chars(),
+            &[
+                0u32, // 'h'
+                1u32, // 'e'
+                6u32, // 'llo!'
+            ]
+        );
+    }
+
+    #[test]
+    fn test_merge_all_dropout() {
+
+    }
 }
