@@ -448,7 +448,7 @@ mod tests {
         );
     }
 
-    /*
+    
     #[test]
     fn test_merge_max_length() {
         // Let's say we have the word 'hello' and a word-to-id vocab that looks
@@ -462,7 +462,9 @@ mod tests {
 
         // We're going to perform a merge on the pair ('l', 'l') ~= (2, 2). Let's
         // say that 'll' has the ID of 4 in the updated word-to-id vocab.
-        let changes = word.merge(2, 2, 4, 2);
+        let changes = word.merge(vec![2,2], 4, 3);
+
+        // So the word should now look like this:
         assert_eq!(
             word.get_chars(),
             &[
@@ -473,13 +475,60 @@ mod tests {
             ]
         );
 
+        // The return value `changes` will be used to update the pair counts during
         assert_eq!(
             changes,
             &[
-                ((1u32, 2u32), -1i32), // count for ('e', 'l') should be decreased by 1.
-                // ((1u32, 4u32), 1i32),  Missing since this would be larger than 2
-                ((2u32, 3u32), -1i32), // count for ('l', 'o') should be decreased by 1.
-                                       // ((4u32, 3u32), 1i32), Missing since this would be larger than 2
+                (Ngram {ids:vec![0u32, 1u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32]}, -1i32),          // count for ('e', 'l') should be decreased by 1.
+                //(Ngram {ids:vec![0u32, 1u32, 2u32, 2u32]}, -1i32),    // count for ('h', 'e', 'l', 'l') should be decreased by 1.
+                (Ngram {ids:vec![1u32, 2u32, 2u32]}, -1i32),    // count for ('e', 'l', 'l') should be decreased by 1.
+                //(Ngram {ids:vec![0u32, 1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('h', 'e', 'l', 'l', 'o') should be decreased by 1.
+                //(Ngram {ids:vec![1u32, 2u32, 2u32, 3u32]}, -1i32),    // count for ('e', 'l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 2u32, 3u32]}, -1i32),    // count for ('l', 'l', 'o') should be decreased by 1.
+                (Ngram {ids:vec![2u32, 3u32]}, -1i32),    // count for ('l', 'o') should be decreased by 1.
+
+                //(Ngram {ids:vec![0u32, 1u32, 4u32]}, 1i32),  // count for ('h', 'e', 'll') should be increased by 1.
+                (Ngram {ids:vec![1u32, 4u32]}, 1i32),  // count for ('e', 'll') should be increased by 1.
+                //(Ngram {ids:vec![0u32, 1u32, 4u32, 3u32]}, 1i32),  // count for ('h', 'e', 'll', 'o') should be increased by 1.
+                //(Ngram {ids:vec![1u32, 4u32, 3u32]}, 1i32),  // count for ('e', 'll','o') should be increased by 1.
+                (Ngram {ids:vec![4u32, 3u32]}, 1i32),  // count for ('ll','o') should be increased by 1.
+            ]
+        );
+    }
+
+    #[test]
+    fn test_merge_all() {
+        let mut word = Word::new();
+        word.add(0, 1); // 'h'
+        word.add(1, 1); // 'e'
+        word.add(2, 1); // 'l'
+        word.add(2, 1); // 'l'
+        word.add(3, 1); // 'o'
+        word.add(4, 1); // '!'
+
+        let mut merges: HashMap<Ngram, (u32, u32)> = HashMap::new();
+        merges.insert(Ngram{ids:vec![2, 2]}, (0, 5));       // merge 'l', 'l' -> 'll' (rank: 0, id: 5)
+        //merges.insert(Ngram{ids:vec![5, 3, 4]}, (1, 6));    // merge 'll', 'o', '!' -> 'llo!' (rank: 1, id: 6)
+
+        word.merge_all(&merges, None);
+        
+        /*assert_eq!(
+            word.get_chars(),
+            &[
+                0u32, // 'h'
+                1u32, // 'e'
+                6u32, // 'llo!'
+            ]
+        );*/
+        assert_eq!(
+            word.get_chars(),
+            &[
+                0u32, // 'h'
+                1u32, // 'e'
+                5u32, // 'll'
+                3u32, // 'o'
+                4u32, // '!'
             ]
         );
     }*/
