@@ -1132,6 +1132,7 @@ impl PyUnigramTrainer {
 pub fn trainers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTrainer>()?;
     m.add_class::<PyBpeTrainer>()?;
+    m.add_class::<PyBneTrainer>()?;
     m.add_class::<PyWordPieceTrainer>()?;
     m.add_class::<PyWordLevelTrainer>()?;
     m.add_class::<PyUnigramTrainer>()?;
