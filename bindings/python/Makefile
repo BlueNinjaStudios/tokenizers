@@ -7,13 +7,13 @@ check_dirs := examples py_src/tokenizers tests
 
 # Format source code automatically
 style:
-	python stub.py
+	python3 stub.py
 	ruff check  $(check_dirs) --fix 
 	ruff format $(check_dirs)
 
 # Check the source code is formatted correctly
 check-style:
-	python stub.py --check
+	python3 stub.py --check
 	ruff check $(check_dirs)
 	ruff format --check $(check_dirs)
 
@@ -22,7 +22,7 @@ TESTS_RESOURCES = $(DATA_DIR)/small.txt $(DATA_DIR)/roberta.json
 # Launch the test suite
 test: $(TESTS_RESOURCES)
 	pip install pytest requests setuptools_rust numpy pyarrow datasets
-	python -m pytest -s -v tests
+	python3 -m pytest -s -v tests
 	cargo test --no-default-features
 
 $(DATA_DIR)/big.txt :
