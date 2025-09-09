@@ -90,3 +90,6 @@ print(output.tokens)
 
 Check the [documentation](https://huggingface.co/docs/tokenizers/index)
 or the [quicktour](https://huggingface.co/docs/tokenizers/quicktour) to learn more!
+
+
+documentation for the Lab cluster GPUs https://docs.google.com/document/d/1EgcNQYRkxYFQA6VrWN2jJRh-DKD22mmM3QTFZuYqbFw/edit?tab=t.0
