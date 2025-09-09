@@ -4,7 +4,6 @@ from tokenizers.trainers import BneTrainer
 from tokenizers.pre_tokenizers import ByteLevel, Whitespace
 import datasets
 
-
 # Build tokenizer
 tokenizer = Tokenizer(BNE(unk_token="[UNK]"))
 trainer = BneTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
@@ -12,7 +11,6 @@ tokenizer.pre_tokenizer = ByteLevel()
 
 # Load dataset
 dataset = datasets.load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-
 
 # Build an iterator over this dataset
 def batch_iterator():
