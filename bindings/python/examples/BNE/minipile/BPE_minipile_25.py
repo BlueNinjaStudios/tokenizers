@@ -3,6 +3,10 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import ByteLevel, Whitespace
 import datasets
+import os
+
+# Define name of test
+name = "bpe_byteLevel_minipile_25"
 
 # Build tokenizer
 model = BPE(unk_token="[UNK]")
@@ -11,7 +15,7 @@ trainer = BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]
 tokenizer.pre_tokenizer = ByteLevel()
 
 # Load dataset
-dataset = datasets.load_dataset("JeanKaddour/minipile", split="train")
+dataset = datasets.load_dataset("JeanKaddour/minipile", split="train").train_test_split(test_size=0.75, seed=42)["train"]
 
 # Build an iterator over this dataset
 def batch_iterator():
@@ -19,11 +23,10 @@ def batch_iterator():
     for batch in dataset.iter(batch_size=batch_size):
         yield batch["text"]
 
-
-print(tokenizer.pre_tokenizer.pre_tokenize)
+os.mkdir("data/" + name)
 
 tokenizer.train_from_iterator(batch_iterator(), trainer, length=len(dataset))
-tokenizer.save("data/bpe_byte-level_minipile.json")
+tokenizer.save(f"data/{name}/{name}.json")
 
-model.save("data/", "bpe_byte-level_minipile_M")
+model.save(f"data/{name}/", name)
 
