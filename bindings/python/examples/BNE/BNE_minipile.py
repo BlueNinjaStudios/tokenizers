@@ -11,7 +11,7 @@ trainer = BneTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]
 tokenizer.pre_tokenizer = ByteLevel()
 
 # Load dataset
-dataset = datasets.load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+dataset = datasets.load_dataset("pietrolesci/finewebedu-20B", "default", split="train")
 
 # Build an iterator over this dataset
 def batch_iterator():
@@ -23,8 +23,8 @@ def batch_iterator():
 print(tokenizer.pre_tokenizer.pre_tokenize)
 
 tokenizer.train_from_iterator(batch_iterator(), trainer, length=len(dataset))
-tokenizer.save("data/bne-byte-level_wt103.json")
+tokenizer.save("data/bne_byte-level_fineweb.json")
 
-model.save("data/", "bne_byte_wt103")
+model.save("data/", "bne_byte-level_fineweb_M")
 
 # To implement: https://huggingface.co/docs/tokenizers/v0.20.3/en/api/models#tokenizers.models.Model
