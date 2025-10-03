@@ -1,13 +1,13 @@
 from tokenizers import Tokenizer
-from tokenizers.models import BNE
-from tokenizers.trainers import BneTrainer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import ByteLevel, Whitespace
 import datasets
 
 # Build tokenizer
-model = BNE(unk_token="[UNK]")
+model = BPE(unk_token="[UNK]")
 tokenizer = Tokenizer(model)
-trainer = BneTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
+trainer = BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
 tokenizer.pre_tokenizer = ByteLevel()
 
 # Load dataset
@@ -23,6 +23,7 @@ def batch_iterator():
 print(tokenizer.pre_tokenizer.pre_tokenize)
 
 tokenizer.train_from_iterator(batch_iterator(), trainer, length=len(dataset))
-tokenizer.save("data/bne_byte-level_minipile.json")
+tokenizer.save("data/bpe_byte-level_minipile.json")
 
-model.save("data/", "bne_byte-level_minipile_M")
+model.save("data/", "bpe_byte-level_minipile_M")
+
