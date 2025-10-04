@@ -18,7 +18,7 @@ trainers = []
 tokenizers = []
 for vocab_len in tokens:
     models.append(BNE(unk_token="[UNK]"))
-    tokenizers.append(Tokenizer(model))
+    tokenizers.append(Tokenizer(models[-1]))
     trainers.append(BneTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"], vocab_size=vocab_len))
     tokenizers[-1].pre_tokenizer = ByteLevel()
 
