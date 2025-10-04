@@ -33,8 +33,8 @@ def batch_iterator():
 
 os.mkdir("data/BNE/")
 for index in range(len(tokens)):
-    tokenizers[index].train_from_iterator(batch_iterator(), trainer, length=len(dataset))
-    tokenizer.save(f"data/BNE/{name}{tokens[index]}.json")
+    tokenizers[index].train_from_iterator(batch_iterator(), trainers[index], length=len(dataset))
+    tokenizers[index].save(f"data/BNE/{name}{tokens[index]}.json")
 
-    model.save(f"data/BNE/", f"{name}{tokens[index]}")
+    models[index].save(f"data/BNE/", f"{name}{tokens[index]}")
 
