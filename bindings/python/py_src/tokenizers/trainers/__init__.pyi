@@ -7,6 +7,50 @@ class Trainer:
     Trainer will return an instance of this class when instantiated.
     """
 
+class BneTrainer(Trainer):
+    """
+    Trainer capable of training a BNE model
+
+    Args:
+        vocab_size (:obj:`int`, `optional`):
+            The size of the final vocabulary, including all tokens and alphabet.
+
+        min_frequency (:obj:`int`, `optional`):
+            The minimum frequency an Ngram should have in order to be merged.
+            This does not guarantee a termination criterion for training.
+
+        min_scale_frequency (:obj:`int`, `optional`):
+            The minimum scaled frequency an Ngram should have in order to be merged.
+            This guarantees a termination criterion for training.
+
+        show_progress (:obj:`bool`, `optional`):
+            Whether to show progress bars while training.
+
+        special_tokens (:obj:`List[Union[str, AddedToken]]`, `optional`):
+            A list of special tokens the model should know of.
+
+        limit_alphabet (:obj:`int`, `optional`):
+            The maximum different characters to keep in the alphabet.
+
+        initial_alphabet (:obj:`List[str]`, `optional`):
+            A list of characters to include in the initial alphabet, even
+            if not seen in the training dataset.
+            If the strings contain more than one character, only the first one
+            is kept.
+
+        continuing_subword_prefix (:obj:`str`, `optional`):
+            A prefix to be used for every subword that is not a beginning-of-word.
+
+        end_of_word_suffix (:obj:`str`, `optional`):
+            A suffix to be used for every subword that is a end-of-word.
+
+        max_token_length (:obj:`int`, `optional`):
+            Prevents creating tokens longer than the specified size.
+            This can help with reducing polluting your vocabulary with
+            highly repetitive tokens like `======` for wikipedia
+
+    """
+
 class BpeTrainer(Trainer):
     """
     Trainer capable of training a BPE model
