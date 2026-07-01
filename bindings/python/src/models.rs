@@ -15,6 +15,7 @@ use tk::models::unigram::Unigram;
 use tk::models::wordlevel::WordLevel;
 use tk::models::wordpiece::{WordPiece, WordPieceBuilder};
 use tk::models::ModelWrapper;
+use tk::tokenizer::PreTokenizedString;
 use tk::{Model, Token};
 use tokenizers as tk;
 
@@ -51,6 +52,23 @@ impl Model for PyModel {
 
     fn tokenize(&self, tokens: &str) -> tk::Result<Vec<Token>> {
         self.model.read().unwrap().tokenize(tokens)
+    }
+
+    /// See [`Model::tokenize_in_pretokenized`] for the lock-once rationale.
+    fn tokenize_in_pretokenized(
+        &self,
+        pretokenized: &mut PreTokenizedString,
+        truncation: Option<(usize, tk::TruncationDirection)>,
+    ) -> tk::Result<()> {
+        let guard = self.model.read().unwrap();
+        match truncation {
+            Some((max_tokens, direction)) => pretokenized.tokenize_with_limit(
+                |normalized| guard.tokenize(normalized.get()),
+                max_tokens,
+                direction,
+            ),
+            None => pretokenized.tokenize(|normalized| guard.tokenize(normalized.get())),
+        }
     }
 
     fn token_to_id(&self, token: &str) -> Option<u32> {
@@ -281,7 +299,7 @@ impl PyBPE {
     fn with_builder(
         mut builder: BpeBuilder,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         if let Some(kwargs) = kwargs {
             for (key, value) in kwargs {
                 let key: String = key.extract()?;
@@ -313,7 +331,9 @@ impl PyBPE {
             Err(e) => Err(exceptions::PyException::new_err(format!(
                 "Error while initializing BPE: {e}"
             ))),
-            Ok(bpe) => Ok((PyBPE {}, bpe.into())),
+            Ok(bpe) => {
+                Ok(PyClassInitializer::<PyModel>::from(PyModel::from(bpe)).add_subclass(PyBPE {}))
+            }
         }
     }
 }
@@ -439,7 +459,7 @@ impl PyBPE {
         vocab: Option<PyVocabBPE>,
         merges: Option<PyMergesBPE>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         if (vocab.is_some() && merges.is_none()) || (vocab.is_none() && merges.is_some()) {
             return Err(exceptions::PyValueError::new_err(
                 "`vocab` and `merges` must be both specified",
@@ -919,7 +939,7 @@ impl PyWordPiece {
     fn with_builder(
         mut builder: WordPieceBuilder,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         if let Some(kwargs) = kwargs {
             for (key, val) in kwargs {
                 let key: String = key.extract()?;
@@ -942,7 +962,10 @@ impl PyWordPiece {
             Err(e) => Err(exceptions::PyException::new_err(format!(
                 "Error while initializing WordPiece: {e}"
             ))),
-            Ok(wordpiece) => Ok((PyWordPiece {}, wordpiece.into())),
+            Ok(wordpiece) => Ok(
+                PyClassInitializer::<PyModel>::from(PyModel::from(wordpiece))
+                    .add_subclass(PyWordPiece {}),
+            ),
         }
     }
 }
@@ -993,7 +1016,7 @@ impl PyWordPiece {
         _py: Python<'_>,
         vocab: Option<PyVocabBPE>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut builder = WordPiece::builder();
 
         if let Some(vocab) = vocab {
@@ -1114,7 +1137,7 @@ impl PyWordLevel {
         _py: Python<'_>,
         vocab: Option<PyVocabBPE>,
         unk_token: Option<String>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut builder = WordLevel::builder();
 
         if let Some(vocab) = vocab {
@@ -1132,13 +1155,12 @@ impl PyWordLevel {
             builder = builder.unk_token(unk_token);
         }
 
-        Ok((
-            PyWordLevel {},
+        Ok(PyClassInitializer::<PyModel>::from(PyModel::from(
             builder
                 .build()
-                .map_err(|e| exceptions::PyException::new_err(e.to_string()))?
-                .into(),
+                .map_err(|e| exceptions::PyException::new_err(e.to_string()))?,
         ))
+        .add_subclass(PyWordLevel {}))
     }
 
     /// Read a :obj:`vocab.json`
@@ -1269,7 +1291,7 @@ impl PyUnigram {
         byte_fallback: Option<bool>,
         alpha: Option<f64>,
         nbest_size: Option<usize>,
-    ) -> PyResult<(Self, PyModel)> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         match (vocab, unk_id, byte_fallback) {
             (Some(vocab), unk_id, byte_fallback) => {
                 let mut model = Unigram::from(vocab, unk_id, byte_fallback.unwrap_or(false))
@@ -1280,13 +1302,15 @@ impl PyUnigram {
                     })?;
                 model.alpha = alpha;
                 model.nbest_size = nbest_size;
-                Ok((PyUnigram {}, model.into()))
+                Ok(PyClassInitializer::<PyModel>::from(PyModel::from(model))
+                    .add_subclass(PyUnigram {}))
             }
             (None, None, _) => {
                 let mut model = Unigram::default();
                 model.alpha = alpha;
                 model.nbest_size = nbest_size;
-                Ok((PyUnigram {}, model.into()))
+                Ok(PyClassInitializer::<PyModel>::from(PyModel::from(model))
+                    .add_subclass(PyUnigram {}))
             }
             _ => Err(exceptions::PyValueError::new_err(
                 "`vocab` and `unk_id` must be both specified",
