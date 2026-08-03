@@ -3,6 +3,8 @@ use crate::tokenizer::{Model, Result, Token};
 use crate::utils::cache::{Cache, DEFAULT_CACHE_CAPACITY, MAX_LENGTH};
 use crate::utils::iter::ResultShunt;
 use ahash::AHashMap;
+use daachorse::charwise::{CharwiseDoubleArrayAhoCorasick, CharwiseDoubleArrayAhoCorasickBuilder};
+use daachorse::MatchKind;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::{
@@ -16,6 +18,7 @@ use std::{
 pub type Vocab = AHashMap<String, u32>;
 type VocabR = AHashMap<u32, String>;
 pub type MergeMap = AHashMap<Ngram, (u32, u32)>;
+pub type MergeMapR = AHashMap<u32, (Ngram, u32)>;
 //pub type Merges = Vec<(String, String)>;
 pub type Merges = Vec<Vec<String>>;
 
@@ -23,6 +26,7 @@ struct Config {
     files: Option<(String, String)>,
     vocab: Vocab,
     merges: Merges,
+    //automaton: DoubleArrayAhoCorasick<u32>,
     cache_capacity: usize,
     dropout: Option<f32>,
     unk_token: Option<String>,
@@ -45,6 +49,7 @@ impl Default for BneBuilder {
                 files: None,
                 vocab: AHashMap::new(),
                 merges: vec![],
+                //automaton: DoubleArrayAhoCorasick::<u32>::new(Vec::<&str>::new()).unwrap(),
                 cache_capacity: DEFAULT_CACHE_CAPACITY,
                 dropout: None,
                 unk_token: None,
@@ -78,6 +83,13 @@ impl BneBuilder {
         self.config.merges = merges;
         self
     }
+    /*
+    /// Set the automaton
+    #[must_use]
+    pub fn automaton(mut self, automaton: DoubleArrayAhoCorasick<u32>) -> Self {
+        self.config.automaton = automaton;
+        self
+    }*/
 
     /// Set the cache's capacity. Set to 0 if you want to disable caching.
     #[must_use]
@@ -156,6 +168,7 @@ impl BneBuilder {
             .iter()
             .map(|(key, val)| (*val, key.to_owned()))
             .collect();
+        // filter out intial vocabulary as it is unused for encodings
         let cache = match self.config.cache_capacity {
             0 => None,
             capacity => Some(Cache::new(capacity)),
@@ -170,6 +183,7 @@ impl BneBuilder {
         let merge_map: MergeMap = self
             .config
             .merges
+            .clone()
             .into_iter()
             .enumerate()
             .map(|(i, vec)| -> Result<(Ngram, (u32, u32))> {
@@ -195,11 +209,51 @@ impl BneBuilder {
                 Ok((Ngram { ids }, (i as u32, *new_id)))
             })
             .collect::<Result<MergeMap>>()?;
+        let merge_map_r: MergeMapR = self
+            .config
+            .merges
+            .into_iter()
+            .enumerate()
+            .map(|(i, vec)| -> Result<(u32, (Ngram, u32))> {
+                let mut ids: Vec<u32> = Vec::with_capacity(vec.len());
+                for s in vec.iter() {
+                    ids.push(
+                        *vocab
+                            .get(s)
+                            .ok_or_else(|| Error::MergeTokenOutOfVocabulary(s.to_owned()))?,
+                    );
+                }
+                // remove continuing subword prefix
+                let mut token_vec = vec.clone();
+                for part_b in token_vec.iter_mut().skip(1) {
+                    *part_b = part_b[prefix_len..].to_string();
+                }
+                // create new token
+                let new_token = token_vec.join("");
+
+                let new_id = vocab
+                    .get(&new_token)
+                    .ok_or(Error::MergeTokenOutOfVocabulary(new_token))?;
+                Ok((*new_id, (Ngram { ids }, i as u32)))
+            })
+            .collect::<Result<MergeMapR>>()?;
+        let automaton = CharwiseDoubleArrayAhoCorasickBuilder::new()
+            .match_kind(MatchKind::Standard)
+            .build_with_values(
+                merge_map
+                    .iter()
+                    .map(|(k, v)| (k.clone().to_utf_8(&merge_map_r), *v))
+                    .collect::<Vec<(String, (u32, u32))>>(),
+            )
+            .map_err(|e| e.to_string())
+            .unwrap();
 
         Ok(BNE {
             vocab,
             vocab_r,
             merges: merge_map,
+            merges_r: merge_map_r,
+            automaton,
             cache,
             dropout: self.config.dropout,
             unk_token: self.config.unk_token,
@@ -221,6 +275,10 @@ pub struct BNE {
     pub(crate) vocab_r: VocabR,
     /// Contains the mapping between Ngrams and their (rank, new_id).
     pub(crate) merges: MergeMap,
+    /// Contains the mapping between ids and their (Ngram, rank).
+    pub(crate) merges_r: MergeMapR,
+    /// The automaton for matching merges.
+    pub(crate) automaton: CharwiseDoubleArrayAhoCorasick<(u32, u32)>,
     /// Contains the cache for optimizing the encoding step.
     cache: Option<Cache<String, Word>>,
     /// Dropout probability for merges. 0.0 = no dropout is the default. At 1.0, tokenization will
@@ -272,6 +330,8 @@ impl Clone for BNE {
             vocab: self.vocab.clone(),
             vocab_r: self.vocab_r.clone(),
             merges: self.merges.clone(),
+            merges_r: self.merges_r.clone(),
+            automaton: self.automaton.clone(),
             cache: fresh_cache,
             dropout: self.dropout,
             unk_token: self.unk_token.clone(),
@@ -470,7 +530,11 @@ impl BNE {
         }
         //println!("{:?}", word);
         //println!("{}", word.get_chars_iter().map(|elem| self.vocab_r.get(&elem).unwrap()).fold(String::new(), |acc, x| acc.to_owned() + &x));
-        word.merge_all(&self.merges, self.dropout);
+        word.merge_all(
+            /*w, &self.vocab, &self.vocab_r,&self.merges,*/ &self.merges_r,
+            &self.automaton,
+            self.dropout,
+        );
 
         Ok(word)
     }
@@ -720,6 +784,10 @@ mod tests {
             vec!["un".to_string(), "related".to_string()],
         ];
         let mut bne = BNE::new(vocab, merges);
+        /*for m in bne.automaton.find_overlapping_iter("unrelated") {
+            println!("{}-{} : {}", m.start(), m.end(), m.value());
+            println!("{}", bne.vocab_r.get(&m.value()).unwrap());
+        }*/
 
         // With no dropout:
         let tokens = bne.tokenize("unrelated").unwrap();
@@ -843,6 +911,11 @@ mod tests {
         assert_eq!(
             bne.merges.get(&Ngram { ids: vec![0, 1] }).unwrap(),
             &(0u32, 3u32)
+        );
+
+        assert_eq!(
+            bne.merges_r.get(&3u32).unwrap(),
+            &(Ngram { ids: vec![0, 1] }, 0u32)
         );
 
         // Check vocab.

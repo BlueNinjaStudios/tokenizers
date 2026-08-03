@@ -62,6 +62,33 @@ impl fmt::Display for Ngram {
         )
     }
 }
+
+impl Ngram {
+    pub fn to_atomic_ids(&self, merges_r: &MergeMapR) -> Vec<u32> {
+        let mut atomic_ids = Vec::with_capacity(self.ids.len());
+        for id in self.ids.iter() {
+            if let Some((ngram, _)) = merges_r.get(id) {
+                atomic_ids.extend(ngram.to_atomic_ids(merges_r));
+            } else {
+                atomic_ids.push(*id);
+            }
+        }
+        atomic_ids
+    }
+
+    pub fn to_utf_8(&self, merges_r: &MergeMapR) -> String {
+        Ngram::ids_to_utf_string(self.to_atomic_ids(merges_r))
+    }
+
+    pub fn ids_to_utf_string(ids: Vec<u32>) -> String {
+        ids.iter().fold("".to_string(), |acc, sym| {
+            acc + &char::from_u32(*sym)
+                .ok_or_else(|| Error::InvalidUnicodeCharacter(sym.to_string()))
+                .unwrap()
+                .to_string()
+        })
+    }
+}
 /// Errors that can be encountered while using or constructing a `BNE` model.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -84,6 +111,9 @@ pub enum Error {
     /// If the provided unk token is out of vocabulary
     #[error("Unk token `{0}` not found in the vocabulary")]
     UnkTokenOutOfVocabulary(String),
+    /// If a
+    #[error("Invalid unicode character `{0}`. This is usually caused by atomic tokens exceeding the limit of 55296")]
+    InvalidUnicodeCharacter(String),
     /// Dropout not between 0 and 1.
     #[error("Dropout should be between 0 and 1, inclusive")]
     InvalidDropout,
@@ -135,17 +165,57 @@ pub use model::*;
 pub use trainer::*;
 use word::*;
 
-/*
 #[cfg(test)]
 mod tests {
+    use ahash::AHashMap;
+
     use super::*;
 
     #[test]
     fn test_ngram_fmt() {
         let a = Ngram {
-            ids: vec![1, 2, 5, 3, 5]
+            ids: vec![1, 2, 5, 3, 5],
         };
         assert_eq!("Ngram: ids[1, 2, 5, 3, 5]", a.to_string());
     }
+
+    #[test]
+    fn test_ngram_to_atomic_ids() {
+        let a = Ngram {
+            ids: vec![1, 2, 7, 4, 9],
+        };
+        let mut merges_r: AHashMap<u32, (Ngram, u32)> = AHashMap::new();
+        merges_r.insert(7, (Ngram { ids: vec![2, 3, 3] }, 1));
+        merges_r.insert(9, (Ngram { ids: vec![5, 7, 6] }, 1));
+        merges_r.insert(6, (Ngram { ids: vec![1, 2, 2] }, 1));
+        assert_eq!(
+            Ngram {
+                ids: a.to_atomic_ids(&merges_r)
+            },
+            Ngram {
+                ids: vec![1, 2, 2, 3, 3, 4, 5, 2, 3, 3, 1, 2, 2]
+            }
+        )
+    }
+
+    #[test]
+    fn test_ngram_to_utf_8() {
+        let a = Ngram {
+            ids: vec![1, 2, 7, 4, 9],
+        };
+        let mut merges_r: AHashMap<u32, (Ngram, u32)> = AHashMap::new();
+        merges_r.insert(7, (Ngram { ids: vec![2, 3, 3] }, 1));
+        merges_r.insert(9, (Ngram { ids: vec![5, 7, 6] }, 1));
+        merges_r.insert(6, (Ngram { ids: vec![1, 2, 2] }, 1));
+        assert_eq!(
+            a.to_utf_8(&merges_r),
+            [1, 2, 2, 3, 3, 4, 5, 2, 3, 3, 1, 2, 2]
+                .iter()
+                .fold("".to_string(), |acc, sym| acc
+                    + &char::from_u32(*sym as u32)
+                        .ok_or_else(|| Error::InvalidUnicodeCharacter(sym.to_string()))
+                        .unwrap()
+                        .to_string())
+        )
+    }
 }
-*/
